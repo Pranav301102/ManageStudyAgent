@@ -1,0 +1,273 @@
+{
+  "version": "1.0",
+  "createdAt": "2026-02-27T05:58:10.045Z",
+  "updatedAt": "2026-02-27T19:37:05.175Z",
+  "profile": {
+    "roles": [],
+    "skills": []
+  },
+  "scouts": [
+    {
+      "id": "s1",
+      "query": "SE Intern at Parallel, Modular, Concora Credit",
+      "strategy": "exact_match",
+      "source": "auto",
+      "performance": {
+        "relevanceScore": 0.85,
+        "jobsFound": 12,
+        "lastEvaluated": "2026-02-27T08:00:00Z"
+      },
+      "tags": [
+        "se-intern",
+        "target-companies"
+      ],
+      "priority": 5,
+      "createdAt": "2026-02-20T10:00:00Z",
+      "lastActive": "2026-02-27T08:30:00Z",
+      "status": "active"
+    },
+    {
+      "id": "s2",
+      "query": "ML Engineer Intern — PyTorch, TensorFlow",
+      "strategy": "skill_based",
+      "source": "auto",
+      "performance": {
+        "relevanceScore": 0.72,
+        "jobsFound": 8,
+        "lastEvaluated": "2026-02-26T08:00:00Z"
+      },
+      "tags": [
+        "ml",
+        "ai",
+        "pytorch"
+      ],
+      "priority": 4,
+      "createdAt": "2026-02-20T10:05:00Z",
+      "lastActive": "2026-02-27T07:15:00Z",
+      "status": "active"
+    },
+    {
+      "id": "s3",
+      "query": "Backend Engineer — Node.js, FastAPI, PostgreSQL, Docker",
+      "strategy": "skill_based",
+      "source": "auto",
+      "performance": {
+        "relevanceScore": 0.72,
+        "jobsFound": 15,
+        "lastEvaluated": "2026-02-26T08:00:00Z"
+      },
+      "tags": [
+        "backend",
+        "node",
+        "fastapi"
+      ],
+      "priority": 4,
+      "createdAt": "2026-02-20T10:10:00Z",
+      "lastActive": "2026-02-27T09:00:00Z",
+      "status": "active"
+    },
+    {
+      "id": "s4",
+      "query": "Monitor Stripe careers",
+      "strategy": "self_replicated",
+      "source": "auto",
+      "performance": {
+        "relevanceScore": 0.89,
+        "jobsFound": 4,
+        "lastEvaluated": "2026-02-26T08:00:00Z"
+      },
+      "tags": [
+        "stripe",
+        "auto-spawned"
+      ],
+      "priority": 4,
+      "createdAt": "2026-02-22T14:00:00Z",
+      "lastActive": "2026-02-27T06:45:00Z",
+      "status": "active"
+    },
+    {
+      "id": "s5",
+      "query": "Monitor Vercel careers",
+      "strategy": "self_replicated",
+      "source": "auto",
+      "performance": {
+        "relevanceScore": 0.92,
+        "jobsFound": 6,
+        "lastEvaluated": "2026-02-26T08:05:00Z"
+      },
+      "tags": [
+        "vercel",
+        "auto-spawned"
+      ],
+      "priority": 5,
+      "createdAt": "2026-02-22T14:05:00Z",
+      "lastActive": "2026-02-27T08:00:00Z",
+      "status": "active"
+    },
+    {
+      "id": "s6",
+      "query": "Expansion: Monitor Anthropic",
+      "strategy": "network_expansion",
+      "source": "auto",
+      "performance": {
+        "relevanceScore": 0.73,
+        "jobsFound": 3,
+        "lastEvaluated": "2026-02-27T08:05:00Z"
+      },
+      "tags": [
+        "anthropic",
+        "expansion"
+      ],
+      "priority": 3,
+      "createdAt": "2026-02-24T09:00:00Z",
+      "lastActive": "2026-02-27T05:30:00Z",
+      "status": "active"
+    },
+    {
+      "id": "s7",
+      "query": "Monitor Supabase careers",
+      "strategy": "self_replicated",
+      "source": "auto",
+      "performance": {
+        "relevanceScore": 0.68,
+        "jobsFound": 2
+      },
+      "tags": [
+        "supabase",
+        "auto-spawned"
+      ],
+      "priority": 3,
+      "createdAt": "2026-02-25T11:00:00Z",
+      "lastActive": "2026-02-27T04:00:00Z",
+      "status": "active"
+    },
+    {
+      "id": "s8",
+      "query": "Junior Java Developer — Spring Boot",
+      "strategy": "exact_match",
+      "source": "auto",
+      "performance": {
+        "relevanceScore": 0.18,
+        "jobsFound": 1
+      },
+      "tags": [
+        "java"
+      ],
+      "priority": 2,
+      "createdAt": "2026-02-20T10:15:00Z",
+      "status": "retired"
+    },
+    {
+      "id": "s9",
+      "query": "DevOps roles — AWS, GCP, Terraform",
+      "strategy": "broad_search",
+      "source": "auto",
+      "performance": {
+        "relevanceScore": 0,
+        "jobsFound": 0
+      },
+      "tags": [
+        "devops"
+      ],
+      "priority": 1,
+      "createdAt": "2026-02-21T08:00:00Z",
+      "status": "retired"
+    }
+  ],
+  "discoveredSources": [
+    {
+      "company": "Stripe",
+      "careerPageUrl": "https://stripe.com/jobs",
+      "jobsFound": 4,
+      "relevanceScore": 0.89,
+      "addedAt": "2026-02-22T14:00:00Z"
+    },
+    {
+      "company": "Vercel",
+      "careerPageUrl": "https://vercel.com/careers",
+      "jobsFound": 6,
+      "relevanceScore": 0.92,
+      "addedAt": "2026-02-22T14:05:00Z"
+    },
+    {
+      "company": "Anthropic",
+      "careerPageUrl": "https://anthropic.com/careers",
+      "jobsFound": 3,
+      "relevanceScore": 0.73,
+      "addedAt": "2026-02-24T09:00:00Z"
+    },
+    {
+      "company": "Supabase",
+      "careerPageUrl": "https://supabase.com/careers",
+      "jobsFound": 2,
+      "relevanceScore": 0.68,
+      "addedAt": "2026-02-25T11:00:00Z"
+    },
+    {
+      "company": "Parallel",
+      "careerPageUrl": "https://parallel.co/careers",
+      "jobsFound": 3,
+      "relevanceScore": 0.85,
+      "addedAt": "2026-02-20T10:00:00Z"
+    },
+    {
+      "company": "Modular",
+      "careerPageUrl": "https://modular.com/careers",
+      "jobsFound": 2,
+      "relevanceScore": 0.71,
+      "addedAt": "2026-02-20T10:00:00Z"
+    },
+    {
+      "company": "Cohere",
+      "careerPageUrl": "https://cohere.com/careers",
+      "jobsFound": 2,
+      "relevanceScore": 0.63,
+      "addedAt": "2026-02-21T09:00:00Z"
+    },
+    {
+      "company": "Concora Credit",
+      "careerPageUrl": "https://concoracredit.com/careers",
+      "jobsFound": 1,
+      "relevanceScore": 0.79,
+      "addedAt": "2026-02-19T13:00:00Z"
+    }
+  ],
+  "insights": {
+    "topSkillsInDemand": [
+      "Python",
+      "TypeScript",
+      "React",
+      "Node.js",
+      "PostgreSQL",
+      "Docker",
+      "Go",
+      "PyTorch",
+      "REST APIs",
+      "FastAPI",
+      "Kubernetes",
+      "Next.js",
+      "Machine Learning",
+      "Git",
+      "AWS",
+      "Data Structures",
+      "Distributed Systems",
+      "GraphQL",
+      "Redis",
+      "CI/CD"
+    ],
+    "emergingCompanies": [
+      "Anthropic",
+      "Mistral AI",
+      "Together AI",
+      "Perplexity",
+      "Groq"
+    ],
+    "queryPatterns": [
+      "role + company + skills",
+      "monitor company careers page",
+      "skill-based broad search"
+    ],
+    "totalJobsDiscovered": 51,
+    "avgRelevanceScore": 0.77
+  }
+}

@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Environments
+venv/
+.venv/
+env/
+ENV/
+bin/
+lib/
+include/
+share/
+
+# Model Cache (GLiNER/HuggingFace)
+.cache/
+models/
+
+# Environment Variables
+.env
+.env.local
+
+# Build/Dist
+build/
+dist/
+*.egg-info/
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
