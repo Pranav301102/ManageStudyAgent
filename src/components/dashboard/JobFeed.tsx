@@ -11,6 +11,7 @@ import {
   ExternalLink,
   ChevronDown,
   ChevronUp,
+  Sparkles,
 } from "lucide-react";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
@@ -42,6 +43,7 @@ export default function JobFeed({ jobs }: Props) {
               key={job.id}
               job={job}
               onInterview={() => router.push(`/interviews?jobId=${job.id}`)}
+              onAlignResume={() => router.push(`/resume?jobId=${job.id}`)}
             />
           ))}
         </div>
@@ -53,9 +55,11 @@ export default function JobFeed({ jobs }: Props) {
 function JobCard({
   job,
   onInterview,
+  onAlignResume,
 }: {
   job: Job;
   onInterview: () => void;
+  onAlignResume: () => void;
 }) {
   const [expanded, setExpanded] = useState(false);
 
@@ -157,6 +161,13 @@ function JobCard({
               Mock Interview
             </button>
           )}
+          <button
+            onClick={onAlignResume}
+            className="text-xs px-3 py-1.5 bg-purple-500/20 hover:bg-purple-500/30 text-purple-400 rounded-lg flex items-center gap-1 transition-colors border border-purple-500/20"
+          >
+            <Sparkles className="w-3 h-3" />
+            Align Resume
+          </button>
           {job.url && (
             <a
               href={job.url}

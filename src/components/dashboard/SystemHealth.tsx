@@ -1,7 +1,7 @@
 "use client";
 
 import { SystemHealth } from "@/lib/types";
-import { Circle, Database, Radar, Bot } from "lucide-react";
+import { Circle, Database, Radar, Bot, Cpu } from "lucide-react";
 
 interface Props {
   health: SystemHealth;
@@ -33,6 +33,18 @@ export default function SystemHealthPanel({ health, onStart, onDemo }: Props) {
           label="Neo4j"
           active={health.neo4jConnected}
           icon={<Database className="w-3.5 h-3.5" />}
+        />
+        <StatusRow
+          label="Pioneer GLiNER"
+          active={health.pioneerConnected ?? false}
+          detail={
+            health.glinerBackend === "pioneer"
+              ? "cloud"
+              : health.glinerBackend === "local"
+              ? "local"
+              : "offline"
+          }
+          icon={<Cpu className="w-3.5 h-3.5" />}
         />
 
         {health.lastScanTime && (

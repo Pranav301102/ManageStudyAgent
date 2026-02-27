@@ -12,6 +12,7 @@ import {
   ChevronRight,
   Briefcase,
   BookOpen,
+  FileText,
   Radar as RadarIcon,
   LogOut,
 } from "lucide-react";
@@ -21,6 +22,7 @@ const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/applications", label: "Applications", icon: Briefcase },
   { href: "/study", label: "Study Plan", icon: BookOpen },
+  { href: "/resume", label: "Resume", icon: FileText },
   { href: "/interviews", label: "Interviews", icon: Mic },
   { href: "/skills", label: "Skill Graph", icon: Network },
   { href: "/sharehub", label: "Job Scout", icon: RadarIcon },

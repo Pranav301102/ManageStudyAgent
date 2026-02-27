@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import Header from "@/components/layout/Header";
 import { SystemHealth, UserProfile, UserSkill } from "@/lib/types";
-import { Settings, User, Key, Target, Save, Plus, X, CheckCircle } from "lucide-react";
+import { Settings, User, Key, Target, Save, Plus, X, CheckCircle, Cpu, Brain } from "lucide-react";
 
 export default function SettingsPage() {
   const [health, setHealth] = useState<SystemHealth>({
@@ -368,6 +368,7 @@ export default function SettingsPage() {
               { label: "Yutori API Key", env: "YUTORI_API_KEY", connected: true },
               { label: "Tavily API Key", env: "TAVILY_API_KEY", connected: true },
               { label: "OpenAI API Key", env: "OPENAI_API_KEY", connected: true },
+              { label: "Pioneer API Key", env: "PIONEER_API_KEY", connected: health.pioneerConnected ?? false },
               { label: "Modulate API Key", env: "MODULATE_API_KEY", connected: false },
               { label: "Neo4j URI", env: "NEO4J_URI", connected: health.neo4jConnected },
             ].map((item) => (
@@ -387,6 +388,48 @@ export default function SettingsPage() {
               </div>
             ))}
           </div>
+        </section>
+
+        {/* Pioneer Cloud Status */}
+        <section className="bg-slate-800 rounded-xl border border-slate-700 p-6">
+          <h3 className="text-sm font-semibold text-white flex items-center gap-2 mb-4">
+            <Cpu className="w-4 h-4 text-indigo-400" /> Pioneer Cloud Status
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div className="bg-slate-900 rounded-lg px-4 py-3">
+              <p className="text-[10px] text-slate-500 mb-1">Backend</p>
+              <p className="text-sm font-medium text-white">
+                {health.glinerBackend === "pioneer"
+                  ? "Pioneer Cloud (Primary)"
+                  : health.glinerBackend === "local"
+                  ? "Local GLiNER (Fallback)"
+                  : "Regex (Offline)"}
+              </p>
+            </div>
+            <div className="bg-slate-900 rounded-lg px-4 py-3">
+              <p className="text-[10px] text-slate-500 mb-1">Model</p>
+              <p className="text-sm font-medium text-white">
+                {health.pioneerModel || "—"}
+              </p>
+            </div>
+            <div className="bg-slate-900 rounded-lg px-4 py-3">
+              <p className="text-[10px] text-slate-500 mb-1">Status</p>
+              <div className="flex items-center gap-2">
+                <span
+                  className={`w-2 h-2 rounded-full ${
+                    health.pioneerConnected ? "bg-emerald-400" : "bg-red-400"
+                  }`}
+                />
+                <p className="text-sm font-medium text-white">
+                  {health.pioneerConnected ? "Connected" : "Disconnected"}
+                </p>
+              </div>
+            </div>
+          </div>
+          <p className="text-[10px] text-slate-500 mt-3">
+            Pioneer GLiNER-2 is the primary entity extraction engine. When unavailable, the system
+            falls back to the local GLiNER microservice, then to regex-based extraction.
+          </p>
         </section>
       </div>
     </div>

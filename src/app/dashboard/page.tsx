@@ -14,6 +14,7 @@ import {
     CalendarPlus,
     Mic,
     BookOpen,
+    FileText,
     Sun,
     Moon,
     CloudSun,
@@ -31,6 +32,7 @@ const quickActions = [
     { href: "/applications", label: "Track Application", icon: CalendarPlus, color: "from-indigo-500 to-purple-600" },
     { href: "/study", label: "Study Now", icon: BookOpen, color: "from-emerald-500 to-teal-600" },
     { href: "/interviews", label: "Mock Interview", icon: Mic, color: "from-amber-500 to-orange-600" },
+    { href: "/resume", label: "Align Resume", icon: FileText, color: "from-purple-500 to-pink-600" },
 ];
 
 export default function DashboardPage() {

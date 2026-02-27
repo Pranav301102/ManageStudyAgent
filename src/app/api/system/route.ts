@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { store } from "@/lib/store";
 import * as neo4jService from "@/lib/services/neo4j-service";
+import * as glinerService from "@/lib/services/gliner-service";
 import { getJson } from "@/lib/db";
 
 export async function GET(request: NextRequest) {
@@ -28,11 +29,27 @@ export async function GET(request: NextRequest) {
     neo4jConnected = false;
   }
 
+  // Live-check Pioneer/GLiNER backend
+  let pioneerConnected = false;
+  let pioneerModel = "unknown";
+  let glinerBackend: "pioneer" | "local" | "fallback" = "fallback";
+  try {
+    const gh = await glinerService.checkGlinerHealth();
+    pioneerConnected = gh.pioneerAvailable;
+    pioneerModel = gh.model;
+    glinerBackend = gh.backend;
+  } catch {
+    // keep defaults
+  }
+
   return NextResponse.json({
     success: true,
     data: {
       ...store.systemHealth,
       neo4jConnected,
+      pioneerConnected,
+      pioneerModel,
+      glinerBackend,
     },
   });
 }

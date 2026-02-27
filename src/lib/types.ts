@@ -177,6 +177,10 @@ export interface SystemHealth {
   totalJobsFound: number;
   interviewsReady: number;
   skillGapsIdentified: number;
+  // Pioneer cloud status (injected by /api/system)
+  pioneerConnected?: boolean;
+  pioneerModel?: string;
+  glinerBackend?: "pioneer" | "local" | "fallback";
 }
 
 // ─── API Response Wrappers ───────────────────────────────────────────

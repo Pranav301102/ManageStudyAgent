@@ -13,6 +13,7 @@ const NAV_LINKS = [
   { href: "/", label: "Dashboard" },
   { href: "/applications", label: "Applications" },
   { href: "/study", label: "Study Plan" },
+  { href: "/resume", label: "Resume" },
   { href: "/interviews", label: "Interviews" },
   { href: "/skills", label: "Skills" },
   { href: "/sharehub", label: "Job Scout" },
@@ -59,6 +60,19 @@ export default function Header({ health }: Props) {
           <Activity className="w-3 h-3" />
           <span>{health.activeScouts} scouts</span>
         </div>
+
+        {health.pioneerConnected !== undefined && (
+          <div className="flex items-center gap-1.5">
+            <Circle
+              className={`w-2 h-2 fill-current ${
+                health.pioneerConnected ? "text-indigo-400" : "text-slate-600"
+              }`}
+            />
+            <span className="text-slate-400">
+              Pioneer {health.glinerBackend === "pioneer" ? "(cloud)" : health.glinerBackend === "local" ? "(local)" : "(off)"}
+            </span>
+          </div>
+        )}
 
         {health.lastScanTime && (
           <span className="text-slate-500">
