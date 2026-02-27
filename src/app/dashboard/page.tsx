@@ -18,6 +18,8 @@ import {
     Sun,
     Moon,
     CloudSun,
+    X,
+    Radar,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -49,6 +51,9 @@ export default function DashboardPage() {
     const [snapshots, setSnapshots] = useState<PerformanceSnapshot[]>([]);
     const [loading, setLoading] = useState(false);
     const [userName, setUserName] = useState("User");
+    const [showScoutModal, setShowScoutModal] = useState(false);
+    const [scoutForm, setScoutForm] = useState({ query: "", companies: "", interval: "30" });
+    const [creatingScout, setCreatingScout] = useState(false);
     const greeting = getGreeting();
 
     const fetchData = useCallback(async () => {
@@ -115,23 +120,45 @@ export default function DashboardPage() {
         }
     };
 
-    const handleCreateScout = async () => {
-        const query = prompt("Enter scout query (e.g., 'SWE Intern jobs at top startups'):");
-        if (!query) return;
+    const handleCreateScout = () => setShowScoutModal(true);
 
+    const handleSubmitScout = async () => {
+        if (!scoutForm.query.trim()) return;
+        setCreatingScout(true);
         try {
+            const companies = scoutForm.companies
+                .split(",")
+                .map((c) => c.trim())
+                .filter(Boolean);
             await fetch("/api/scouts", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
-                    query,
-                    targetCompanies: [],
-                    interval: 1800,
+                    query: scoutForm.query,
+                    targetCompanies: companies,
+                    interval: parseInt(scoutForm.interval) * 60,
                 }),
             });
+            setShowScoutModal(false);
+            setScoutForm({ query: "", companies: "", interval: "30" });
             await fetchData();
         } catch (err) {
             console.error("Failed to create scout:", err);
+        } finally {
+            setCreatingScout(false);
+        }
+    };
+
+    const handleApplyJob = async (jobId: string) => {
+        try {
+            await fetch("/api/applications", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ jobId }),
+            });
+            await fetchData();
+        } catch (err) {
+            console.error("Failed to add application:", err);
         }
     };
 
@@ -195,7 +222,7 @@ export default function DashboardPage() {
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                     <div className="lg:col-span-2 space-y-6">
                         <ScoutCards scouts={scouts} onCreateScout={handleCreateScout} />
-                        <JobFeed jobs={jobs} />
+                        <JobFeed jobs={jobs} onApply={handleApplyJob} />
                     </div>
 
                     <div>
@@ -207,6 +234,92 @@ export default function DashboardPage() {
                     </div>
                 </div>
             </div>
+
+            {/* Scout Creation Modal */}
+            {showScoutModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+                    <div className="bg-slate-800 rounded-2xl border border-slate-700 w-full max-w-md p-6 shadow-2xl">
+                        <div className="flex items-center justify-between mb-5">
+                            <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                                <Radar className="w-5 h-5 text-indigo-400" />
+                                Create Scout
+                            </h3>
+                            <button onClick={() => setShowScoutModal(false)} className="text-slate-400 hover:text-white transition-colors">
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+
+                        <div className="space-y-4">
+                            <div>
+                                <label className="text-xs font-medium text-slate-300 mb-1.5 block">Search Query</label>
+                                <input
+                                    type="text"
+                                    placeholder="e.g. SWE Intern at top YC startups"
+                                    value={scoutForm.query}
+                                    onChange={(e) => setScoutForm({ ...scoutForm, query: e.target.value })}
+                                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="text-xs font-medium text-slate-300 mb-1.5 block">Target Companies <span className="text-slate-500">(comma-separated, optional)</span></label>
+                                <input
+                                    type="text"
+                                    placeholder="e.g. Stripe, Figma, Notion, Linear"
+                                    value={scoutForm.companies}
+                                    onChange={(e) => setScoutForm({ ...scoutForm, companies: e.target.value })}
+                                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="text-xs font-medium text-slate-300 mb-1.5 block">Check Interval</label>
+                                <select
+                                    value={scoutForm.interval}
+                                    onChange={(e) => setScoutForm({ ...scoutForm, interval: e.target.value })}
+                                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                                >
+                                    <option value="15">Every 15 minutes</option>
+                                    <option value="30">Every 30 minutes</option>
+                                    <option value="60">Every hour</option>
+                                    <option value="360">Every 6 hours</option>
+                                    <option value="1440">Every 24 hours</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div className="flex items-center gap-3 mt-6">
+                            <button
+                                onClick={handleSubmitScout}
+                                disabled={!scoutForm.query.trim() || creatingScout}
+                                className="flex-1 bg-indigo-500 hover:bg-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium py-2.5 rounded-lg transition-colors flex items-center justify-center gap-2"
+                            >
+                                {creatingScout ? (
+                                    <>
+                                        <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                        Creating...
+                                    </>
+                                ) : (
+                                    <>
+                                        <Radar className="w-4 h-4" />
+                                        Deploy Scout
+                                    </>
+                                )}
+                            </button>
+                            <button
+                                onClick={() => setShowScoutModal(false)}
+                                className="px-4 py-2.5 bg-slate-700 hover:bg-slate-600 text-slate-300 text-sm rounded-lg transition-colors"
+                            >
+                                Cancel
+                            </button>
+                        </div>
+
+                        <p className="text-[10px] text-slate-500 mt-3 text-center">
+                            Powered by Yutori — scouts continuously monitor job boards and company career pages
+                        </p>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

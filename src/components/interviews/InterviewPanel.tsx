@@ -338,13 +338,16 @@ function AnsweredQuestion({ question }: { question: InterviewQuestion }) {
 
 function VoiceMetrics({ analysis }: { analysis: VoiceAnalysis }) {
   return (
-    <div className="flex items-center gap-4 mt-2">
-      <Meter label="Confidence" value={analysis.confidence} />
-      <Meter label="Clarity" value={analysis.clarity} />
-      <Meter label="Pace" value={analysis.pace} />
-      <span className="text-[10px] text-slate-500">
-        {analysis.fillerWordCount} fillers
-      </span>
+    <div className="mt-2">
+      <div className="flex items-center gap-4">
+        <Meter label="Confidence" value={analysis.confidence} />
+        <Meter label="Clarity" value={analysis.clarity} />
+        <Meter label="Pace" value={analysis.pace} />
+        <span className="text-[10px] text-slate-500">
+          {analysis.fillerWordCount} fillers
+        </span>
+      </div>
+      <p className="text-[8px] text-purple-400/50 italic mt-1">Powered by Modulate Velma-2</p>
     </div>
   );
 }

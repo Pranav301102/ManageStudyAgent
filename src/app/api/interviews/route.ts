@@ -79,6 +79,33 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ success: true, data: ideal });
     }
 
+    // Return the stored report for a completed interview
+    if (action === "get-report") {
+      const interview = store.interviews.get(interviewId);
+      if (!interview) {
+        return NextResponse.json({ error: "Interview not found" }, { status: 404 });
+      }
+      if (interview.report) {
+        return NextResponse.json({ success: true, data: interview.report });
+      }
+      return NextResponse.json({ error: "No report available yet" }, { status: 404 });
+    }
+
+    // Regenerate a report for a completed interview
+    if (action === "regenerate-report") {
+      const interview = store.interviews.get(interviewId);
+      if (!interview) {
+        return NextResponse.json({ error: "Interview not found" }, { status: 404 });
+      }
+      if (interview.status !== "completed") {
+        return NextResponse.json({ error: "Interview not completed" }, { status: 400 });
+      }
+      const report = await interviewAnalyzer.generateInterviewReport(interview);
+      interview.report = report;
+      store.interviews.set(interview.id, interview);
+      return NextResponse.json({ success: true, data: report });
+    }
+
     const interview = store.interviews.get(interviewId);
     if (!interview) {
       return NextResponse.json({ error: "Interview not found" }, { status: 404 });
@@ -147,6 +174,15 @@ export async function PUT(request: NextRequest) {
       // Post-interview: auto-analyze performance, update skills & study plan
       interviewAnalyzer.analyzePerformance(interview).catch((err) =>
         console.error("[Interviews API] Post-interview analysis failed:", err)
+      );
+
+      // Auto-generate comprehensive interview report
+      interviewAnalyzer.generateInterviewReport(interview).then((report) => {
+        interview.report = report;
+        store.interviews.set(interview.id, interview);
+        console.log(`[Interviews API] Report generated for interview ${interview.id}`);
+      }).catch((err) =>
+        console.error("[Interviews API] Report generation failed:", err)
       );
     }
 

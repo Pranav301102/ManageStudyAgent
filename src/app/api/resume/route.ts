@@ -8,6 +8,18 @@
 //   { action: "align", resume, jobDescription, jobId }
 //     → Full alignment: rewrite resume, re-verify ATS, score
 //
+//   { action: "save_default_resume", resume }
+//     → Store as the user's default resume
+//
+//   { action: "get_default_resume" }
+//     → Retrieve stored default resume
+//
+//   { action: "get_alignments" }
+//     → Retrieve alignment history
+//
+//   { action: "submit_feedback", alignmentId, rating, comment?, preferredVersion? }
+//     → Submit feedback on an alignment — feeds Pioneer fine-tuning
+//
 //   { action: "training_status" }
 //     → How many alignment samples collected for fine-tuning
 //
@@ -17,7 +29,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import * as resumeAlignment from "@/lib/services/resume-alignment";
 import { store } from "@/lib/store";
-import { Job } from "@/lib/types";
+import { Job, ResumeFeedback } from "@/lib/types";
 
 export async function POST(req: NextRequest) {
     try {
@@ -177,6 +189,88 @@ export async function POST(req: NextRequest) {
                 return NextResponse.json({
                     success: result.success,
                     data: result,
+                });
+            }
+
+            // ─── Save Default Resume ─────────────────────────────────
+            case "save_default_resume": {
+                const { resume } = body;
+                if (!resume) {
+                    return NextResponse.json(
+                        { success: false, error: "resume is required" },
+                        { status: 400 }
+                    );
+                }
+                resumeAlignment.saveDefaultResume(resume);
+                // Also update profile resumeSummary
+                store.profile.resumeSummary = resume.slice(0, 500);
+                return NextResponse.json({
+                    success: true,
+                    data: { saved: true, length: resume.length },
+                });
+            }
+
+            // ─── Get Default Resume ──────────────────────────────────
+            case "get_default_resume": {
+                const defaultResume = resumeAlignment.getDefaultResume();
+                return NextResponse.json({
+                    success: true,
+                    data: { resume: defaultResume },
+                });
+            }
+
+            // ─── Get Alignment History ───────────────────────────────
+            case "get_alignments": {
+                const history = resumeAlignment.getAlignmentHistory();
+                return NextResponse.json({
+                    success: true,
+                    data: {
+                        alignments: history.map((r) => ({
+                            id: r.alignment.id,
+                            jobTitle: r.jobTitle,
+                            company: r.company,
+                            atsScore: r.alignment.atsScore,
+                            humanScore: r.alignment.humanScore,
+                            overallScore: r.alignment.overallScore,
+                            createdAt: r.alignment.createdAt,
+                            feedback: r.feedback || null,
+                            alignedResume: r.alignment.alignedResume,
+                            missingKeywords: r.alignment.missingKeywords,
+                            addedKeywords: r.alignment.addedKeywords,
+                        })),
+                    },
+                });
+            }
+
+            // ─── Submit Feedback ─────────────────────────────────────
+            case "submit_feedback": {
+                const { alignmentId, rating, comment, preferredVersion } = body;
+                if (!alignmentId || !rating) {
+                    return NextResponse.json(
+                        { success: false, error: "alignmentId and rating are required" },
+                        { status: 400 }
+                    );
+                }
+                const feedback: ResumeFeedback = {
+                    alignmentId,
+                    rating,
+                    comment: comment || undefined,
+                    preferredVersion: preferredVersion || undefined,
+                    timestamp: new Date().toISOString(),
+                };
+                const result2 = resumeAlignment.submitFeedback(feedback);
+                return NextResponse.json({
+                    success: true,
+                    data: result2,
+                });
+            }
+
+            // ─── Feedback Stats ──────────────────────────────────────
+            case "feedback_stats": {
+                const stats = resumeAlignment.getFeedbackStats();
+                return NextResponse.json({
+                    success: true,
+                    data: stats,
                 });
             }
 

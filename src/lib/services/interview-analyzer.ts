@@ -5,7 +5,7 @@
 import OpenAI from "openai";
 import { config } from "../config";
 import { store, addPerformanceSnapshot } from "../store";
-import { InterviewSession, PerformanceSnapshot, SkillDelta } from "../types";
+import { InterviewSession, InterviewReport, PerformanceSnapshot, SkillDelta } from "../types";
 import * as studyPlanner from "./study-planner";
 
 let client: OpenAI | null = null;
@@ -57,7 +57,8 @@ QUESTIONS & PERFORMANCE:
 ${answeredQuestions.map((q, i) => `${i + 1}. [${q.type}/${q.category}] ${q.text}
    Score: ${q.contentScore || "N/A"}/5
    Feedback: ${q.feedback || "None"}
-   Voice: confidence=${q.voiceAnalysis?.confidence || "N/A"}, clarity=${q.voiceAnalysis?.clarity || "N/A"}`
+   Voice (Modulate Velma-2): confidence=${q.voiceAnalysis?.confidence || "N/A"}%, clarity=${q.voiceAnalysis?.clarity || "N/A"}%, pace=${q.voiceAnalysis?.pace || "N/A"}%
+   Sentiment: ${q.voiceAnalysis?.sentiment || "N/A"}, Emotion: ${q.voiceAnalysis?.emotion || "N/A"}, Fillers: ${q.voiceAnalysis?.fillerWordCount || 0}`
                     ).join("\n\n")}
 
 USER CURRENT SKILLS:
@@ -66,7 +67,9 @@ ${store.profile.skills.map((s) => `${s.name}: level ${s.proficiencyLevel}/5`).jo
 PAST PERFORMANCE TREND:
 ${store.performanceHistory.length > 0
                             ? store.performanceHistory.slice(-3).map((p) => `  Weaknesses: ${p.weaknesses.join(", ")} | Trend: ${p.overallTrend}`).join("\n")
-                            : "  First interview"}`,
+                            : "  First interview"}
+
+NOTE: Include voice/communication issues (low confidence, excessive fillers, unclear speech) in weaknesses if relevant.`,
                 },
             ],
             temperature: 0.3,
@@ -211,4 +214,124 @@ function applySkillDeltas(deltas: SkillDelta[]) {
             skill.proficiencyLevel = Math.max(1, Math.min(5, delta.newLevel));
         }
     }
+}
+
+// ─── Interview Report Generation ────────────────────────────────────
+
+/**
+ * Generate a comprehensive post-interview report from all Q&A data,
+ * scores, and voice metrics. Uses Gemini to produce a narrative summary
+ * and a concrete improvement plan.
+ */
+export async function generateInterviewReport(
+    interview: InterviewSession
+): Promise<InterviewReport> {
+    const answered = interview.questions.filter((q) => q.response);
+
+    // Build per-question breakdown
+    const questionBreakdown = answered.map((q) => ({
+        question: q.text,
+        type: q.type,
+        contentScore: q.contentScore ?? 0,
+        deliveryScore: q.deliveryScore ?? 0,
+        feedback: q.feedback ?? "No feedback available",
+        voiceMetrics: q.voiceAnalysis
+            ? {
+                  confidence: q.voiceAnalysis.confidence,
+                  clarity: q.voiceAnalysis.clarity,
+                  pace: q.voiceAnalysis.pace,
+                  fillerCount: q.voiceAnalysis.fillerWordCount,
+              }
+            : undefined,
+    }));
+
+    // Compute aggregate scores
+    const avgContent =
+        answered.length > 0
+            ? answered.reduce((s, q) => s + (q.contentScore ?? 0), 0) / answered.length
+            : 0;
+    const avgDelivery =
+        answered.length > 0
+            ? answered.reduce((s, q) => s + (q.deliveryScore ?? 0), 0) / answered.length
+            : 0;
+
+    // Ask Gemini to produce the narrative pieces
+    let summary = "";
+    let strengths: string[] = [];
+    let weaknesses: string[] = [];
+    let recommendedStudyTopics: string[] = [];
+    let improvementPlan = "";
+
+    try {
+        const reportPrompt = `You are an expert interview coach. A candidate just completed a mock interview for "${interview.job.title}" at "${interview.job.company}".
+
+Here is the question-by-question breakdown:
+
+${questionBreakdown
+    .map(
+        (q, i) =>
+            `Q${i + 1} (${q.type}): "${q.question}"
+  Content: ${q.contentScore}/5 | Delivery: ${q.deliveryScore}/5
+  Feedback: ${q.feedback}${
+                q.voiceMetrics
+                    ? `\n  Voice — confidence: ${q.voiceMetrics.confidence}%, clarity: ${q.voiceMetrics.clarity}%, pace: ${q.voiceMetrics.pace}%, fillers: ${q.voiceMetrics.fillerCount}`
+                    : ""
+            }`
+    )
+    .join("\n\n")}
+
+Overall content average: ${avgContent.toFixed(1)}/5
+Overall delivery average: ${avgDelivery.toFixed(1)}/5
+Overall score: ${interview.overallScore ?? "N/A"}/100
+
+Respond in this exact JSON format:
+{
+  "summary": "2-3 sentence executive summary of performance",
+  "strengths": ["strength1", "strength2", "strength3"],
+  "weaknesses": ["weakness1", "weakness2", "weakness3"],
+  "recommendedStudyTopics": ["topic1", "topic2", "topic3"],
+  "improvementPlan": "A detailed 2-3 paragraph plan for how to improve before the next interview"
+}`;
+
+        const result = await getClient().chat.completions.create({
+            model: config.gemini.model,
+            messages: [{ role: "user", content: reportPrompt }],
+            response_format: { type: "json_object" },
+            temperature: 0.4,
+        });
+
+        const parsed = JSON.parse(result.choices[0]?.message?.content ?? "{}");
+        summary = parsed.summary ?? "Interview completed.";
+        strengths = parsed.strengths ?? [];
+        weaknesses = parsed.weaknesses ?? [];
+        recommendedStudyTopics = parsed.recommendedStudyTopics ?? [];
+        improvementPlan = parsed.improvementPlan ?? "Review weak areas and practice again.";
+    } catch (err) {
+        console.error("[interview-analyzer] Report generation LLM error:", err);
+        summary = `Completed mock interview for ${interview.job.title} at ${interview.job.company}. Scored ${interview.overallScore ?? "N/A"}/100 overall.`;
+        strengths = avgContent >= 3 ? ["Solid technical knowledge"] : [];
+        weaknesses = avgContent < 3 ? ["Needs deeper technical preparation"] : [];
+        recommendedStudyTopics = interview.questions
+            .filter((q) => (q.contentScore ?? 0) < 3)
+            .map((q) => q.category)
+            .filter((v, i, a) => a.indexOf(v) === i);
+        improvementPlan = "Focus on weaker question categories and practice with timed sessions.";
+    }
+
+    const report: InterviewReport = {
+        id: `report-${interview.id}`,
+        interviewId: interview.id,
+        generatedAt: new Date().toISOString(),
+        summary,
+        contentScore: Math.round(avgContent * 10) / 10,
+        deliveryScore: Math.round(avgDelivery * 10) / 10,
+        overallScore: interview.overallScore ?? Math.round(((avgContent + avgDelivery) / 2) * 20),
+        strengths,
+        weaknesses,
+        questionBreakdown,
+        recommendedStudyTopics,
+        improvementPlan,
+    };
+
+    return report;
 }

@@ -200,6 +200,7 @@ export default function StudyPage() {
                         </h2>
                         <p className="text-xs text-slate-400 mt-1">
                             AI-optimized schedule based on your availability, skill gaps, and interviews
+                            <span className="text-[9px] text-indigo-400/50 italic ml-1">— Powered by Gemini + Pioneer</span>
                         </p>
                     </div>
                     <button
@@ -299,6 +300,12 @@ export default function StudyPage() {
                                                 <p className="text-[10px] text-slate-500">
                                                     {block.date} · {block.startTime}–{block.endTime} · {block.type.replace("-", " ")}
                                                 </p>
+                                                {block.triggeredBy === "interview-failure" && block.failureReason && (
+                                                    <p className="text-[9px] text-red-400/70 mt-0.5 flex items-center gap-1">
+                                                        <TrendingDown className="w-2.5 h-2.5" />
+                                                        Interview weakness: {block.failureReason}
+                                                    </p>
+                                                )}
                                             </div>
 
                                             <span className={`text-[9px] px-1.5 py-0.5 rounded-full ${PRIORITY_BADGE[block.priority]}`}>

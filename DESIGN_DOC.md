@@ -77,7 +77,7 @@ An end-to-end autonomous agent that monitors the live job market, discovers matc
 
 ### 2.4 Modulate — Voice Intelligence for Mock Interviews
 
-**Velma API** — Ensemble Listening Model
+**Velma-2 API** — Ensemble Listening Model
 - Analyzes voice conversations for sentiment, emotion, confidence, and speech patterns
 - Processes audio streams to evaluate interview performance
 - Detects nervousness, hesitation, clarity, and assertiveness in responses
@@ -85,10 +85,17 @@ An end-to-end autonomous agent that monitors the live job market, discovers matc
 
 **Integration Approach**:
 - Browser captures user audio via Web Speech API (STT) + MediaRecorder
-- Audio chunks sent to Modulate's Velma for analysis (sentiment, emotion, confidence scoring)
+- Audio chunks sent to Modulate's Velma-2 for analysis (sentiment, emotion, confidence scoring)
 - LLM generates interviewer questions from job data + Tavily research
 - TTS (Web Speech Synthesis API) delivers interviewer questions
 - Modulate provides real-time voice quality feedback panel during mock interview
+
+**Real-Time Skill Evaluation via Modulate**:
+- Voice analysis results are included in the interview analyzer's LLM prompt alongside content scores
+- Modulate metrics tracked per-question: confidence (35% weight), clarity (30%), pace (20%), filler count (15%)
+- Low confidence/clarity scores contribute to post-interview weakness identification
+- `computeVoiceScore()` produces a weighted composite score for each response
+- Study plan adaptation considers voice/communication weaknesses alongside technical gaps
 
 ---
 
@@ -569,8 +576,28 @@ Request → Pioneer Cloud API ──[ok]──→ Return entities
 | `analyze` | ATS analysis — entity overlap, missing skills, match score |
 | `align` | Full alignment pipeline — extract → rewrite → verify → collect |
 | `align_all` | Bulk align resume to top 5 discovered jobs |
+| `save_default_resume` | Store user's default resume for re-use across alignments |
+| `get_default_resume` | Retrieve stored default resume |
+| `get_alignments` | Get full alignment history with feedback status |
+| `submit_feedback` | Rate alignment quality — feeds Pioneer fine-tuning loop |
+| `feedback_stats` | Aggregate feedback stats (good/needs_improvement/bad counts) |
 | `training_status` | Check accumulated training samples and fine-tune status |
 | `trigger_finetune` | Manually trigger fine-tuning with collected data |
+
+**Default Resume + Alignment History**:
+- Users store one **default resume** as their base — used automatically for all alignment operations
+- Every alignment is recorded in an **alignment history** with job title, company, ATS score, and timestamp
+- Users can revisit past alignments, compare scores, and provide feedback
+
+**Feedback-Driven Fine-Tuning**:
+- After each alignment, users rate quality: **Good** / **Needs Work** / **Poor**
+- Optional: text comment explaining what's wrong + manual edited version
+- Feedback signal is injected into Pioneer training data:
+  - **Good** → positive sample, reinforces current patterns
+  - **Needs Improvement** → moderate signal, reduced weight
+  - **Bad** → negative signal, if user provides `preferredVersion` → gold-standard training pair
+- Auto-triggers Pioneer fine-tuning at 50 accumulated samples
+- Creates a **self-improving loop**: user feedback → better extraction → better alignment → better feedback
 
 ### 8.4 Reka Vision API — Multimodal Whiteboard Analysis
 
@@ -643,3 +670,64 @@ Request → Pioneer Cloud API ──[ok]──→ Return entities
 | `POST` | `/api/interviews/{id}/extract-entities` | Run GLiNER on transcript/code for skill extraction |
 | `POST` | `/api/interviews/{id}/hint` | Request an AI hint based on current code/whiteboard state |
 | `GET`  | `/api/interviews/{id}/live-insights` | Get aggregated AI insights (skills, code analysis, board analysis) |
+
+---
+
+## 11. Feedback Loops & Self-Improving Pipelines
+
+### 11.1 Resume Alignment Feedback Loop
+
+```
+User pastes resume → Pioneer extracts entities → Gemini rewrites → Pioneer verifies
+        ↓                                                                    ↓
+ Alignment stored in                                              User rates: 👍 / ⚡ / 👎
+ alignment history                                                      ↓
+        ↓                                                    Feedback → training data
+ Available for                                                (weight adjusted by rating)
+ comparison                                                          ↓
+                                                          50 samples → auto fine-tune
+                                                                      ↓
+                                                           Better Pioneer model deployed
+```
+
+### 11.2 Interview → Study Plan Adaptation Loop
+
+```
+Mock Interview completed → Modulate voice metrics + content scores
+        ↓
+Interview Analyzer (Gemini) → identifies weaknesses + skill deltas
+        ↓
+Study Planner receives PerformanceSnapshot
+        ↓
+Re-generates plan with failure-triggered blocks:
+  - Blocks tagged with triggeredBy: "interview-failure"
+  - failureReason attached (e.g., "binary search edge cases")
+  - Priority auto-upgraded to "high" or "critical"
+  - Uncovered weaknesses → injected as explicit skill-gap blocks
+```
+
+### 11.3 Voice-Communication Feedback into Study Planning
+
+- Modulate Velma-2 metrics (confidence, clarity, pace, fillers, sentiment, emotion) are included in the post-interview LLM analysis prompt
+- Communication weaknesses are treated like skill gaps: low confidence → study block for "Communication drills / confidence exercises"
+- Filler word patterns tracked across interviews to show improvement trend
+
+---
+
+## 12. Sponsor Technology Branding
+
+All sponsor technologies are attributed in the UI with "Powered by [Sponsor]" badges:
+
+| Component | Sponsor Attribution |
+|-----------|--------------------|
+| AI Insights → Detected Skills | Powered by **Pioneer GLiNER-2** |
+| AI Insights → Code Analysis | Powered by **Gemini** |
+| AI Insights → Whiteboard | Powered by **Reka Vision** |
+| Voice Analytics Panel | Powered by **Modulate** |
+| InterviewPanel → VoiceMetrics | Powered by **Modulate Velma-2** |
+| Whiteboard Analysis Panel | Powered by **Reka Vision** |
+| Resume ATS Optimizer | Powered by **Pioneer GLiNER-2** + **Gemini 2.5 Flash** |
+| Study Plan Generation | Powered by **Gemini** + **Pioneer** |
+| Loading States | "Powered by Pioneer GLiNER-2" |
+
+This ensures every sponsor gets visible attribution at the point of value delivery throughout the application.

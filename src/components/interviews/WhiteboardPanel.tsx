@@ -226,6 +226,7 @@ export default function WhiteboardPanel({
                         <span className="text-xs font-medium text-white">
                             AI Vision Analysis
                         </span>
+                        <span className="text-[8px] text-cyan-400/60 italic ml-auto">Powered by Reka Vision</span>
                     </div>
 
                     <p className="text-xs text-slate-400 leading-relaxed">

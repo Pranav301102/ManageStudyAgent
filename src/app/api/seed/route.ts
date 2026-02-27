@@ -3,8 +3,8 @@
 
 import { NextResponse } from "next/server";
 import { v4 as uuid } from "uuid";
-import { addJob, addScout, store } from "@/lib/store";
-import { Job, Scout } from "@/lib/types";
+import { addJob, addScout, addApplication, addPerformanceSnapshot, store } from "@/lib/store";
+import { Job, Scout, Application, PerformanceSnapshot, StudyBlock, StudySchedule, DailyChallenge } from "@/lib/types";
 import * as memoryLibrary from "@/lib/services/memory-library";
 
 // ─── Demo Scouts ─────────────────────────────────────────────────────
@@ -90,6 +90,34 @@ const DEMO_SCOUTS: Omit<Scout, "id">[] = [
     status: "paused",
     jobsFound: 0,
     createdAt: "2026-02-21T08:00:00Z",
+  },
+  // New scouts
+  {
+    query: "Frontend Engineer Intern — React, Vue, Tailwind CSS, accessibility",
+    targetCompanies: ["Figma", "Linear", "Notion"],
+    interval: 1800,
+    status: "active",
+    jobsFound: 5,
+    createdAt: "2026-02-23T09:00:00Z",
+    lastRun: "2026-02-27T07:00:00Z",
+  },
+  {
+    query: "Data Engineering Intern — Spark, Airflow, dbt, SQL pipelines",
+    targetCompanies: ["Databricks", "Snowflake", "dbt Labs"],
+    interval: 3600,
+    status: "active",
+    jobsFound: 3,
+    createdAt: "2026-02-24T16:00:00Z",
+    lastRun: "2026-02-27T06:00:00Z",
+  },
+  {
+    query: "Monitor Linear careers — engineering and product roles",
+    targetCompanies: ["Linear"],
+    interval: 1800,
+    status: "active",
+    jobsFound: 2,
+    createdAt: "2026-02-25T10:00:00Z",
+    lastRun: "2026-02-27T09:30:00Z",
   },
 ];
 
@@ -295,6 +323,131 @@ const DEMO_JOBS: Omit<Job, "id">[] = [
     status: "analyzed",
     scoutId: "scout-main",
   },
+  // ─── Additional Jobs ───────────────────────────────────────────────
+  {
+    title: "Frontend Engineering Intern",
+    company: "Figma",
+    location: "San Francisco, CA (Hybrid)",
+    url: "https://figma.com/careers/frontend-intern",
+    description: "Build collaborative design tools used by millions. Deep React, TypeScript, and Canvas/WebGL experience desired. Accessibility focus.",
+    requiredSkills: [
+      { name: "React", importance: "required" },
+      { name: "TypeScript", importance: "required" },
+    ],
+    preferredSkills: [
+      { name: "WebGL", importance: "preferred" },
+      { name: "Accessibility", importance: "preferred" },
+    ],
+    techStack: ["React", "TypeScript", "WebGL", "Node.js", "C++"],
+    salaryRange: "$60-70/hr",
+    postedDate: "2026-02-25T00:00:00Z",
+    discoveredAt: "2026-02-25T12:00:00Z",
+    matchScore: 76,
+    skillGaps: [{ skillName: "WebGL", importance: "preferred", learningResources: ["webglfundamentals.org"], bridgePath: ["JavaScript"] }],
+    interviewReady: false,
+    status: "analyzed",
+    scoutId: "scout-frontend",
+  },
+  {
+    title: "Software Engineer Intern — Productivity",
+    company: "Linear",
+    location: "Remote (US/EU)",
+    url: "https://linear.app/careers/se-intern",
+    description: "Help build the fastest project management tool. TypeScript, React, PostgreSQL. Strong product sense valued.",
+    requiredSkills: [
+      { name: "TypeScript", importance: "required" },
+      { name: "React", importance: "required" },
+    ],
+    preferredSkills: [
+      { name: "PostgreSQL", importance: "preferred" },
+      { name: "GraphQL", importance: "preferred" },
+    ],
+    techStack: ["TypeScript", "React", "Node.js", "PostgreSQL", "GraphQL"],
+    salaryRange: "$55-65/hr",
+    postedDate: "2026-02-26T00:00:00Z",
+    discoveredAt: "2026-02-26T10:00:00Z",
+    matchScore: 85,
+    skillGaps: [],
+    interviewReady: true,
+    status: "interview-ready",
+    scoutId: "scout-linear",
+  },
+  {
+    title: "Data Engineering Intern",
+    company: "Databricks",
+    location: "San Francisco, CA",
+    url: "https://databricks.com/careers/data-intern",
+    description: "Build data pipelines for the lakehouse platform. Python, Spark, SQL experience required.",
+    requiredSkills: [
+      { name: "Python", importance: "required" },
+      { name: "SQL", importance: "required" },
+    ],
+    preferredSkills: [
+      { name: "Apache Spark", importance: "preferred" },
+      { name: "Airflow", importance: "preferred" },
+    ],
+    techStack: ["Python", "Apache Spark", "SQL", "Airflow", "Delta Lake"],
+    salaryRange: "$65-75/hr",
+    postedDate: "2026-02-24T00:00:00Z",
+    discoveredAt: "2026-02-24T14:00:00Z",
+    matchScore: 62,
+    skillGaps: [
+      { skillName: "Apache Spark", importance: "preferred", learningResources: ["spark.apache.org/docs"], bridgePath: ["Python"] },
+    ],
+    interviewReady: false,
+    status: "researching",
+    scoutId: "scout-data",
+  },
+  {
+    title: "Security Engineering Intern",
+    company: "Cloudflare",
+    location: "Austin, TX (Hybrid)",
+    url: "https://cloudflare.com/careers/security-intern",
+    description: "Help secure the internet. Python, Go, networking fundamentals. Interest in security and cryptography a plus.",
+    requiredSkills: [
+      { name: "Python", importance: "required" },
+      { name: "Networking", importance: "required" },
+    ],
+    preferredSkills: [
+      { name: "Go", importance: "preferred" },
+      { name: "Cryptography", importance: "preferred" },
+    ],
+    techStack: ["Go", "Rust", "Python", "Lua", "Kubernetes"],
+    postedDate: "2026-02-23T00:00:00Z",
+    discoveredAt: "2026-02-23T11:00:00Z",
+    matchScore: 55,
+    skillGaps: [
+      { skillName: "Networking", importance: "required", learningResources: ["beej.us/guide/bgnet"], bridgePath: [] },
+      { skillName: "Go", importance: "preferred", learningResources: ["go.dev/tour"], bridgePath: ["Python"] },
+    ],
+    interviewReady: false,
+    status: "analyzed",
+    scoutId: "scout-backend",
+  },
+  {
+    title: "AI/ML Platform Intern",
+    company: "Notion",
+    location: "San Francisco, CA",
+    url: "https://notion.so/careers/ai-ml-intern",
+    description: "Build AI features for the all-in-one workspace. Python, LLMs, RAG systems. Interest in productivity tools desired.",
+    requiredSkills: [
+      { name: "Python", importance: "required" },
+      { name: "Machine Learning", importance: "required" },
+    ],
+    preferredSkills: [
+      { name: "LLMs", importance: "preferred" },
+      { name: "RAG", importance: "preferred" },
+    ],
+    techStack: ["Python", "TypeScript", "React", "PostgreSQL", "LangChain"],
+    salaryRange: "$60-70/hr",
+    postedDate: "2026-02-26T00:00:00Z",
+    discoveredAt: "2026-02-26T18:00:00Z",
+    matchScore: 73,
+    skillGaps: [],
+    interviewReady: false,
+    status: "analyzed",
+    scoutId: "scout-frontend",
+  },
 ];
 
 // ─── Demo Lifecycle Events (for the visual graph) ────────────────────
@@ -367,6 +520,9 @@ export async function POST() {
       if (demoScout.query.includes("Supabase")) scoutIdMap.set("scout-supabase", id);
       if (demoScout.query.includes("Java")) scoutIdMap.set("scout-java", id);
       if (demoScout.query.includes("DevOps")) scoutIdMap.set("scout-devops", id);
+      if (demoScout.query.includes("Frontend Engineer")) scoutIdMap.set("scout-frontend", id);
+      if (demoScout.query.includes("Data Engineering")) scoutIdMap.set("scout-data", id);
+      if (demoScout.query.includes("Linear")) scoutIdMap.set("scout-linear", id);
       addScout(scout);
     }
 
@@ -437,14 +593,146 @@ export async function POST() {
     const { upsertJson } = await import("@/lib/db");
     upsertJson("study_schedule", "lifecycle_events", lifecycleData);
 
+    // 5. Auto-promote discovered jobs → applications (demo pipeline)
+    const allJobs = Array.from(store.jobs.values()) as Job[];
+    const applicationStatuses: Array<{ matchMin: number; status: Application["status"]; interviewDate?: string; notes: string; nextAction?: string }> = [
+      { matchMin: 90, status: "technical", interviewDate: "2026-03-03T14:00:00Z", notes: "Passed phone screen, technical interview scheduled", nextAction: "Prep system design" },
+      { matchMin: 85, status: "phone-screen", interviewDate: "2026-03-01T10:00:00Z", notes: "Recruiter reached out, phone screen next week", nextAction: "Research company culture" },
+      { matchMin: 80, status: "screening", notes: "Application submitted, awaiting recruiter response" },
+      { matchMin: 75, status: "applied", notes: "Applied via careers page" },
+      { matchMin: 70, status: "applied", notes: "Applied through referral" },
+    ];
+
+    let appsCreated = 0;
+    for (const job of allJobs) {
+      const bucket = applicationStatuses.find((b) => job.matchScore >= b.matchMin);
+      if (bucket) {
+        const app: Application = {
+          id: uuid(),
+          jobId: job.id,
+          job,
+          status: bucket.status,
+          appliedAt: job.discoveredAt,
+          timeline: [
+            { status: "saved", date: job.discoveredAt, notes: "Auto-saved from scout discovery" },
+            { status: "applied", date: new Date(new Date(job.discoveredAt).getTime() + 86400000).toISOString(), notes: bucket.notes },
+            ...(bucket.status !== "applied" ? [{ status: bucket.status as Application["status"], date: new Date(new Date(job.discoveredAt).getTime() + 172800000).toISOString(), notes: bucket.notes }] : []),
+          ],
+          notes: bucket.notes,
+          interviewDate: bucket.interviewDate,
+          nextAction: bucket.nextAction,
+        };
+        addApplication(app);
+        job.status = "applied";
+        addJob(job);
+        appsCreated++;
+      }
+    }
+
+    // 6. Seed performance history (past mock interviews)
+    const demoSnapshots: PerformanceSnapshot[] = [
+      {
+        interviewId: "past-interview-1",
+        date: "2026-02-22T16:00:00Z",
+        strengths: ["Python fundamentals", "REST API design", "Clear communication"],
+        weaknesses: ["Binary search edge cases", "Time complexity analysis"],
+        recommendedFocus: ["Algorithm practice", "Big-O notation drill"],
+        skillDeltas: [
+          { skillName: "Python", previousLevel: 3, newLevel: 4, reason: "Strong Python syntax in coding question" },
+          { skillName: "Algorithms", previousLevel: 2, newLevel: 2, reason: "Struggled with binary search edge case" },
+        ],
+        overallTrend: "improving",
+      },
+      {
+        interviewId: "past-interview-2",
+        date: "2026-02-24T15:00:00Z",
+        strengths: ["System design thinking", "Database schema design"],
+        weaknesses: ["Microservices communication patterns", "Voice confidence low (62%)"],
+        recommendedFocus: ["Distributed systems patterns", "Communication drills", "Mock interview practice"],
+        skillDeltas: [
+          { skillName: "System Design", previousLevel: 2, newLevel: 3, reason: "Good database schema but missed caching layer" },
+          { skillName: "Communication", previousLevel: 3, newLevel: 3, reason: "Modulate detected low confidence and excessive fillers" },
+        ],
+        overallTrend: "improving",
+      },
+      {
+        interviewId: "past-interview-3",
+        date: "2026-02-26T11:00:00Z",
+        strengths: ["React component architecture", "TypeScript type safety", "Improved confidence (78%)"],
+        weaknesses: ["State management at scale", "CSS Grid/Flexbox layout"],
+        recommendedFocus: ["Advanced React patterns", "CSS layout mastery", "Redux/Zustand patterns"],
+        skillDeltas: [
+          { skillName: "React", previousLevel: 3, newLevel: 4, reason: "Strong component decomposition and hooks usage" },
+          { skillName: "CSS", previousLevel: 2, newLevel: 2, reason: "Struggled with responsive layout question" },
+        ],
+        overallTrend: "improving",
+      },
+    ];
+
+    for (const snap of demoSnapshots) {
+      addPerformanceSnapshot(snap);
+    }
+
+    // 7. Seed a study schedule with failure-driven blocks
+    const today = new Date();
+    const formatDate = (d: Date) => d.toISOString().split("T")[0];
+    const addDays = (d: Date, n: number) => { const r = new Date(d); r.setDate(r.getDate() + n); return r; };
+
+    const demoStudyPlan: StudyBlock[] = [
+      { id: uuid(), date: formatDate(today), startTime: "18:00", endTime: "19:30", topic: "Binary Search & Edge Cases", type: "coding-practice", priority: "critical", completed: false, triggeredBy: "interview-failure", failureReason: "Binary search edge cases" },
+      { id: uuid(), date: formatDate(today), startTime: "20:00", endTime: "21:00", topic: "Big-O Notation Drill", type: "skill-gap", priority: "high", completed: false, triggeredBy: "interview-failure", failureReason: "Time complexity analysis" },
+      { id: uuid(), date: formatDate(addDays(today, 1)), startTime: "18:00", endTime: "19:30", topic: "Distributed Systems: Message Queues & Event Sourcing", type: "system-design", priority: "critical", completed: false, triggeredBy: "interview-failure", failureReason: "Microservices communication patterns" },
+      { id: uuid(), date: formatDate(addDays(today, 1)), startTime: "20:00", endTime: "21:00", topic: "Communication & Confidence Exercises", type: "behavioral", priority: "high", completed: false, triggeredBy: "interview-failure", failureReason: "Voice confidence low (62%)" },
+      { id: uuid(), date: formatDate(addDays(today, 2)), startTime: "18:00", endTime: "20:00", topic: "React Advanced Patterns (HOC, Render Props, Compound)", type: "coding-practice", priority: "high", completed: false, triggeredBy: "interview-failure", failureReason: "State management at scale" },
+      { id: uuid(), date: formatDate(addDays(today, 2)), startTime: "20:30", endTime: "21:30", topic: "CSS Grid & Flexbox Layout Mastery", type: "skill-gap", priority: "medium", completed: false, triggeredBy: "interview-failure", failureReason: "CSS Grid/Flexbox layout" },
+      { id: uuid(), date: formatDate(addDays(today, 3)), startTime: "10:00", endTime: "12:00", topic: "Mock Interview: System Design (Stripe prep)", type: "mock-interview", priority: "critical", completed: false, linkedJobId: allJobs.find((j) => j.company === "Stripe")?.id },
+      { id: uuid(), date: formatDate(addDays(today, 3)), startTime: "14:00", endTime: "15:30", topic: "Behavioral Questions: STAR Method Deep Dive", type: "behavioral", priority: "medium", completed: false },
+      { id: uuid(), date: formatDate(addDays(today, 4)), startTime: "18:00", endTime: "20:00", topic: "Graph Algorithms: BFS, DFS, Dijkstra", type: "coding-practice", priority: "high", completed: false },
+      { id: uuid(), date: formatDate(addDays(today, 4)), startTime: "20:30", endTime: "21:30", topic: "PostgreSQL Query Optimization", type: "skill-gap", priority: "medium", completed: false },
+      { id: uuid(), date: formatDate(addDays(today, 5)), startTime: "18:00", endTime: "19:30", topic: "Mock Interview: Coding (Vercel prep)", type: "mock-interview", priority: "critical", completed: false, linkedJobId: allJobs.find((j) => j.company === "Vercel")?.id },
+      { id: uuid(), date: formatDate(addDays(today, 6)), startTime: "10:00", endTime: "12:00", topic: "Full Mock Interview Simulation", type: "mock-interview", priority: "critical", completed: false },
+    ];
+
+    const demoSchedule: StudySchedule = {
+      id: uuid(),
+      availability: [
+        { dayOfWeek: 0, startHour: 10, endHour: 18 },
+        { dayOfWeek: 1, startHour: 18, endHour: 22 },
+        { dayOfWeek: 2, startHour: 18, endHour: 22 },
+        { dayOfWeek: 3, startHour: 18, endHour: 22 },
+        { dayOfWeek: 4, startHour: 18, endHour: 22 },
+        { dayOfWeek: 5, startHour: 18, endHour: 22 },
+        { dayOfWeek: 6, startHour: 10, endHour: 18 },
+      ],
+      studyPlan: demoStudyPlan,
+      generatedAt: new Date().toISOString(),
+    };
+    store.studySchedule = demoSchedule;
+
+    // 8. Seed daily challenge
+    const demoChallenge: DailyChallenge = {
+      id: uuid(),
+      date: new Date().toISOString().split("T")[0],
+      question: "Implement a LRU Cache with O(1) get and put operations. Explain your choice of data structure and handle edge cases for capacity=0.",
+      type: "coding",
+      difficulty: "medium",
+      targetSkill: "Data Structures",
+      completed: false,
+      streak: 4,
+    };
+    store.dailyChallenge = demoChallenge;
+
     return NextResponse.json({
       success: true,
       data: {
         scoutsSeeded: DEMO_SCOUTS.length,
         jobsSeeded: DEMO_JOBS.length,
+        applicationsSeeded: appsCreated,
+        performanceSnapshots: demoSnapshots.length,
+        studyBlocks: demoStudyPlan.length,
         sourcesSeeded: library.discoveredSources.length,
         lifecycleEvents: DEMO_LIFECYCLE_EVENTS.length,
-        message: `Seeded ${DEMO_SCOUTS.length} scouts, ${DEMO_JOBS.length} jobs, ${library.discoveredSources.length} sources, and ${DEMO_LIFECYCLE_EVENTS.length} lifecycle events.`,
+        message: `Seeded ${DEMO_SCOUTS.length} scouts, ${DEMO_JOBS.length} jobs, ${appsCreated} applications, ${demoSnapshots.length} performance snapshots, ${demoStudyPlan.length} study blocks, and ${DEMO_LIFECYCLE_EVENTS.length} lifecycle events.`,
       },
     });
   } catch (error) {

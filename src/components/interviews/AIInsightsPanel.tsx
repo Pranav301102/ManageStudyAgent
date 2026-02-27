@@ -38,11 +38,14 @@ export default function AIInsightsPanel({
                 {/* Extracted Skills */}
                 {extractedSkills.length > 0 && (
                     <div>
-                        <div className="flex items-center gap-1 mb-2">
-                            <Sparkles className="w-3 h-3 text-emerald-400" />
-                            <span className="text-[10px] text-emerald-400 font-medium uppercase tracking-wider">
-                                Detected Skills
-                            </span>
+                        <div className="flex items-center justify-between mb-2">
+                            <div className="flex items-center gap-1">
+                                <Sparkles className="w-3 h-3 text-emerald-400" />
+                                <span className="text-[10px] text-emerald-400 font-medium uppercase tracking-wider">
+                                    Detected Skills
+                                </span>
+                            </div>
+                            <span className="text-[8px] text-indigo-400/60 italic">Powered by Pioneer GLiNER-2</span>
                         </div>
                         <div className="space-y-2">
                             {Object.entries(skillsByLabel).map(([label, entities]) => (
@@ -70,11 +73,14 @@ export default function AIInsightsPanel({
                 {/* Code Analysis */}
                 {codeAnalysis && (
                     <div>
-                        <div className="flex items-center gap-1 mb-1">
-                            <Code className="w-3 h-3 text-indigo-400" />
-                            <span className="text-[10px] text-indigo-400 font-medium uppercase tracking-wider">
-                                Code Analysis
-                            </span>
+                        <div className="flex items-center justify-between mb-1">
+                            <div className="flex items-center gap-1">
+                                <Code className="w-3 h-3 text-indigo-400" />
+                                <span className="text-[10px] text-indigo-400 font-medium uppercase tracking-wider">
+                                    Code Analysis
+                                </span>
+                            </div>
+                            <span className="text-[8px] text-blue-400/60 italic">Powered by Gemini</span>
                         </div>
                         <p className="text-[11px] text-slate-400 leading-relaxed">
                             {codeAnalysis}
@@ -85,11 +91,14 @@ export default function AIInsightsPanel({
                 {/* Whiteboard Analysis */}
                 {whiteboardAnalysis && (
                     <div>
-                        <div className="flex items-center gap-1 mb-1">
-                            <Pencil className="w-3 h-3 text-cyan-400" />
-                            <span className="text-[10px] text-cyan-400 font-medium uppercase tracking-wider">
-                                Whiteboard
-                            </span>
+                        <div className="flex items-center justify-between mb-1">
+                            <div className="flex items-center gap-1">
+                                <Pencil className="w-3 h-3 text-cyan-400" />
+                                <span className="text-[10px] text-cyan-400 font-medium uppercase tracking-wider">
+                                    Whiteboard
+                                </span>
+                            </div>
+                            <span className="text-[8px] text-cyan-400/60 italic">Powered by Reka Vision</span>
                         </div>
                         <p className="text-[11px] text-slate-400 leading-relaxed">
                             {whiteboardAnalysis}

@@ -14,7 +14,7 @@
 
 import OpenAI from "openai";
 import { config } from "../config";
-import { ExtractedEntity, Job, UserProfile } from "../types";
+import { ExtractedEntity, Job, UserProfile, ResumeFeedback, AlignedResumeRecord } from "../types";
 import * as pioneerService from "./pioneer-service";
 import * as glinerService from "./gliner-service";
 
@@ -54,6 +54,103 @@ export interface ATSAnalysis {
     }>;
 }
 
+// ─── Default resume + alignment history (in-memory, persists in server) ─
+
+let defaultResume: string = "";
+const alignmentHistory: AlignedResumeRecord[] = [];
+const feedbackLog: ResumeFeedback[] = [];
+
+export function saveDefaultResume(resume: string): void {
+    defaultResume = resume;
+    console.log(`[ResumeAlign] Default resume saved (${resume.length} chars)`);
+}
+
+export function getDefaultResume(): string {
+    return defaultResume;
+}
+
+export function getAlignmentHistory(): AlignedResumeRecord[] {
+    return alignmentHistory;
+}
+
+export function getAlignmentById(id: string): AlignedResumeRecord | undefined {
+    return alignmentHistory.find((r) => r.alignment.id === id);
+}
+
+/**
+ * Submit feedback on an alignment — feeds into Pioneer fine-tuning loop.
+ * If status is "bad" and a preferredVersion is supplied, we treat the user's
+ * version as a GOLD STANDARD label for training.
+ */
+export function submitFeedback(feedback: ResumeFeedback): {
+    accepted: boolean;
+    trainingSamplesCollected: number;
+} {
+    feedbackLog.push(feedback);
+
+    const record = alignmentHistory.find(
+        (r) => r.alignment.id === feedback.alignmentId
+    );
+    if (record) {
+        record.feedback = feedback;
+    }
+
+    // Use feedback to enrich training data:
+    // - "good" → alignment is correct, use as positive sample
+    // - "needs_improvement" / "bad" → alignment needs refinement
+    // - If user provides preferredVersion → gold-standard label pair
+    if (record) {
+        const goldResume = feedback.preferredVersion || record.alignment.alignedResume;
+        const isPositive = feedback.rating === "good";
+
+        trainingDataCollector.push({
+            resume: record.alignment.originalResume,
+            jobDescription: record.alignment.jobDescription,
+            alignedResume: goldResume,
+            atsScore: isPositive ? record.alignment.atsScore : Math.max(0, record.alignment.atsScore - 20),
+            entities: [
+                ...record.alignment.resumeEntities,
+                ...record.alignment.jdEntities,
+            ],
+            timestamp: feedback.timestamp,
+            feedbackRating: feedback.rating,
+        });
+
+        console.log(
+            `[ResumeAlign] Feedback received: ${feedback.rating} for ${feedback.alignmentId}` +
+            ` | Training samples: ${trainingDataCollector.length}/${FINE_TUNE_THRESHOLD}`
+        );
+
+        // Auto-trigger fine-tuning when threshold is reached
+        if (trainingDataCollector.length >= FINE_TUNE_THRESHOLD) {
+            triggerAutoFineTune().catch((err) =>
+                console.error("[ResumeAlign] Auto fine-tune failed:", err)
+            );
+        }
+    }
+
+    return {
+        accepted: true,
+        trainingSamplesCollected: trainingDataCollector.length,
+    };
+}
+
+export function getFeedbackStats(): {
+    total: number;
+    good: number;
+    needsImprovement: number;
+    bad: number;
+    feedbackLog: ResumeFeedback[];
+} {
+    return {
+        total: feedbackLog.length,
+        good: feedbackLog.filter((f) => f.rating === "good").length,
+        needsImprovement: feedbackLog.filter((f) => f.rating === "needs_improvement").length,
+        bad: feedbackLog.filter((f) => f.rating === "bad").length,
+        feedbackLog: feedbackLog.slice(-20), // last 20
+    };
+}
+
 // ─── Training data collector for Pioneer fine-tuning ────────────────
 
 interface AlignmentTrainingSample {
@@ -63,6 +160,7 @@ interface AlignmentTrainingSample {
     atsScore: number;
     entities: ExtractedEntity[];
     timestamp: string;
+    feedbackRating?: string;  // user feedback enriches training signal
 }
 
 // In-memory collector — persists within server lifetime
@@ -258,6 +356,13 @@ export async function alignResume(
 
     // Step 7: Collect training data for Pioneer fine-tuning
     collectTrainingData(alignment);
+
+    // Step 8: Store in alignment history
+    alignmentHistory.push({
+        alignment,
+        jobTitle: job.title,
+        company: job.company,
+    });
 
     return alignment;
 }

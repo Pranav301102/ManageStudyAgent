@@ -117,6 +117,34 @@ export interface InterviewSession {
   completedAt?: string;
   overallScore?: number;
   overallFeedback?: string;
+  report?: InterviewReport;
+}
+
+export interface InterviewReport {
+  id: string;
+  interviewId: string;
+  generatedAt: string;
+  summary: string;
+  contentScore: number;        // avg 1-5
+  deliveryScore: number;       // avg 1-5
+  overallScore: number;        // 0-100
+  strengths: string[];
+  weaknesses: string[];
+  questionBreakdown: {
+    question: string;
+    type: string;
+    contentScore: number;
+    deliveryScore: number;
+    feedback: string;
+    voiceMetrics?: {
+      confidence: number;
+      clarity: number;
+      pace: number;
+      fillerCount: number;
+    };
+  }[];
+  recommendedStudyTopics: string[];
+  improvementPlan: string;
 }
 
 export type InterviewStatus = "preparing" | "active" | "completed" | "cancelled";
@@ -368,6 +396,8 @@ export interface StudyBlock {
   priority: "critical" | "high" | "medium";
   linkedJobId?: string;
   completed: boolean;
+  triggeredBy?: string;      // "interview-failure" | "skill-gap" | "manual"
+  failureReason?: string;    // What interview weakness triggered this block
 }
 
 // ─── Post-Interview Performance Types ────────────────────────────────
@@ -436,6 +466,25 @@ export interface ATSAnalysis {
     resumeCount: number;
     overlap: number;
   }>;
+}
+
+// ─── Resume Feedback Types (Pioneer fine-tuning loop) ───────────────
+
+export type ResumeFeedbackRating = "good" | "needs_improvement" | "bad";
+
+export interface ResumeFeedback {
+  alignmentId: string;
+  rating: ResumeFeedbackRating;
+  comment?: string;            // Free-text user feedback
+  preferredVersion?: string;   // User's manually edited version (gold standard)
+  timestamp: string;
+}
+
+export interface AlignedResumeRecord {
+  alignment: ResumeAlignment;
+  feedback?: ResumeFeedback;
+  jobTitle: string;
+  company: string;
 }
 
 // ─── Pioneer Fine-Tuning Types ──────────────────────────────────────

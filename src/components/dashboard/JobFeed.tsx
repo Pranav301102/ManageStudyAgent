@@ -12,15 +12,17 @@ import {
   ChevronDown,
   ChevronUp,
   Sparkles,
+  Briefcase,
 } from "lucide-react";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
 interface Props {
   jobs: Job[];
+  onApply?: (jobId: string) => void;
 }
 
-export default function JobFeed({ jobs }: Props) {
+export default function JobFeed({ jobs, onApply }: Props) {
   const router = useRouter();
 
   return (
@@ -44,6 +46,7 @@ export default function JobFeed({ jobs }: Props) {
               job={job}
               onInterview={() => router.push(`/interviews?jobId=${job.id}`)}
               onAlignResume={() => router.push(`/resume?jobId=${job.id}`)}
+              onApply={onApply ? () => onApply(job.id) : undefined}
             />
           ))}
         </div>
@@ -56,12 +59,15 @@ function JobCard({
   job,
   onInterview,
   onAlignResume,
+  onApply,
 }: {
   job: Job;
   onInterview: () => void;
   onAlignResume: () => void;
+  onApply?: () => void;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const [applied, setApplied] = useState(false);
 
   const isNew =
     Date.now() - new Date(job.discoveredAt).getTime() < 60 * 60 * 1000;
@@ -168,6 +174,20 @@ function JobCard({
             <Sparkles className="w-3 h-3" />
             Align Resume
           </button>
+          {onApply && (
+            <button
+              onClick={() => { onApply(); setApplied(true); }}
+              disabled={applied}
+              className={`text-xs px-3 py-1.5 rounded-lg flex items-center gap-1 transition-colors ${
+                applied
+                  ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 cursor-default"
+                  : "bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 border border-emerald-500/20"
+              }`}
+            >
+              <Briefcase className="w-3 h-3" />
+              {applied ? "Tracked" : "Track"}
+            </button>
+          )}
           {job.url && (
             <a
               href={job.url}

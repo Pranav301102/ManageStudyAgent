@@ -144,6 +144,7 @@ TARGET ROLES: ${profile.targetRoles.join(", ")}`,
 
 /**
  * Adapt the study plan after an interview — shift focus based on results.
+ * Adds failure-triggered blocks for specific weaknesses identified.
  */
 export async function adaptPlan(
     snapshot: PerformanceSnapshot
@@ -153,7 +154,57 @@ export async function adaptPlan(
     const { availability } = store.studySchedule;
 
     // Re-generate with updated weakness info already in store
-    return generateStudyPlan(availability);
+    const newSchedule = await generateStudyPlan(availability);
+
+    // Mark blocks that correspond to interview weaknesses as failure-triggered
+    if (newSchedule && snapshot.weaknesses.length > 0) {
+        for (const block of newSchedule.studyPlan) {
+            // Check if this block's topic matches any weakness
+            const matchedWeakness = snapshot.weaknesses.find(
+                (w) =>
+                    block.topic.toLowerCase().includes(w.toLowerCase()) ||
+                    w.toLowerCase().includes(block.topic.toLowerCase().split(" ")[0])
+            );
+            if (matchedWeakness) {
+                block.triggeredBy = "interview-failure";
+                block.failureReason = matchedWeakness;
+                // Upgrade priority for failure-driven blocks
+                if (block.priority !== "critical") block.priority = "high";
+            }
+        }
+
+        // If no blocks matched weaknesses directly, inject explicit blocks
+        const covered = new Set(
+            newSchedule.studyPlan
+                .filter((b) => b.triggeredBy === "interview-failure")
+                .map((b) => b.failureReason)
+        );
+        const uncoveredWeaknesses = snapshot.weaknesses.filter(
+            (w) => !covered.has(w)
+        );
+        for (const weakness of uncoveredWeaknesses.slice(0, 3)) {
+            newSchedule.studyPlan.push({
+                id: uuid(),
+                date: new Date().toISOString().split("T")[0],
+                startTime: "18:00",
+                endTime: "19:30",
+                topic: `Focus: ${weakness}`,
+                type: "skill-gap",
+                priority: "critical",
+                completed: false,
+                triggeredBy: "interview-failure",
+                failureReason: weakness,
+            });
+        }
+
+        store.studySchedule = newSchedule;
+        console.log(
+            `[StudyPlanner] Adapted plan: ${snapshot.weaknesses.length} weaknesses → ` +
+            `${newSchedule.studyPlan.filter((b) => b.triggeredBy === "interview-failure").length} failure blocks added`
+        );
+    }
+
+    return newSchedule;
 }
 
 /** Mark a study block as completed. */
