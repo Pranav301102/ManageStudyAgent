@@ -66,7 +66,7 @@ export default function LandingPage() {
           <div className="flex items-center gap-2">
             <Radar className="w-8 h-8 text-indigo-400" />
             <span className="text-xl font-bold text-white tracking-tight">
-              CareerAdvocate
+              HireNodes
             </span>
           </div>
           <div className="flex items-center gap-4">
@@ -240,7 +240,7 @@ export default function LandingPage() {
           <div className="flex items-center gap-2">
             <Radar className="w-4 h-4 text-indigo-400" />
             <span className="text-xs text-slate-500">
-              CareerAdvocate · Built for SB Hacks XI
+              HireNodes · Built for SB Hacks XI
             </span>
           </div>
           <div className="flex items-center gap-4 text-xs text-slate-600">

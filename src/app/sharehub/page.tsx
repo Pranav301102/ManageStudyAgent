@@ -275,14 +275,15 @@ export default function JobScoutPage() {
     }
   };
 
-  // Use live scouts from /api/scouts (Yutori-linked) as primary, memory library as secondary
+  // Use live scouts from /api/scouts (Yutori-linked) as primary data source
   const activeYutoriScouts = liveScouts.filter((s) => s.status === "active");
   const pausedYutoriScouts = liveScouts.filter((s) => s.status === "paused");
   const totalYutoriJobs = liveScouts.reduce((sum, s) => sum + (s.jobsFound || 0), 0);
   const yutoriLinkedCount = liveScouts.filter((s) => s.yutoriScoutId).length;
 
-  const activeScouts = library?.scouts.filter((s) => s.status === "active") || [];
-  const retiredScouts = library?.scouts.filter((s) => s.status === "retired") || [];
+  // Feed live scouts into graph and fleet (NOT memory library)
+  const activeScouts = liveScouts.filter((s) => s.status === "active");
+  const retiredScouts = liveScouts.filter((s) => s.status === "paused" || s.status === "error");
   const hasData = liveScouts.length > 0 || (library?.scouts.length ?? 0) > 0 || jobs.length > 0;
 
   if (loading) {
@@ -399,13 +400,12 @@ export default function JobScoutPage() {
         )}
 
         {/* Stats Row */}
-        <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
           <StatCard icon={<Satellite className="w-4 h-4 text-cyan-400" />} label="Yutori Scouts" value={yutoriLinkedCount} />
           <StatCard icon={<Activity className="w-4 h-4 text-emerald-400" />} label="Active" value={activeYutoriScouts.length} />
           <StatCard icon={<Briefcase className="w-4 h-4 text-indigo-400" />} label="Jobs Found" value={jobs.length} />
           <StatCard icon={<Zap className="w-4 h-4 text-amber-400" />} label="Scout Jobs" value={totalYutoriJobs} />
           <StatCard icon={<TrendingUp className="w-4 h-4 text-purple-400" />} label="Avg Match" value={jobs.length > 0 ? `${Math.round(jobs.reduce((s, j) => s + j.matchScore, 0) / jobs.length)}%` : "—"} />
-          <StatCard icon={<GitBranch className="w-4 h-4 text-purple-400" />} label="Self-Replicated" value={lifecycleEvents.filter(e => e.type === "replicated").length} />
         </div>
 
         {/* Tab Navigation */}
@@ -488,8 +488,8 @@ function ScoutGraph({
   jobs,
   events,
 }: {
-  scouts: MemoryScout[];
-  retiredScouts: MemoryScout[];
+  scouts: Scout[];
+  retiredScouts: Scout[];
   jobs: Job[];
   events: LifecycleEvent[];
   sources: DiscoveredSource[];
@@ -501,25 +501,33 @@ function ScoutGraph({
     // Central hub
     nodes.push({ id: "hub", type: "hub", label: "Job Scout Engine", sublabel: "Self-Replicating AI", x: 400, y: 60, color: "#6366f1" });
 
-    const autoScouts = scouts.filter(s => s.strategy === "exact_match" || s.strategy === "skill_based");
-    const replicatedScouts = scouts.filter(s => s.strategy === "self_replicated");
-    const expandedScouts = scouts.filter(s => s.strategy === "network_expansion");
+    // Split scouts into different columns based on their source or tags
+    const categorize = (s: Scout): "general" | "company" | "emerging" => {
+      if (s.query.startsWith("Monitor ") && s.targetCompanies.length > 0) return "company";
+      if (s.strategy === "company_focused") return "company";
+      if (s.query.toLowerCase().includes("anthropic") || s.query.toLowerCase().includes("emerging") || s.strategy === "emerging_company") return "emerging";
+      return "general";
+    };
+
+    const autoScouts = scouts.filter(s => categorize(s) === "general");
+    const replicatedScouts = scouts.filter(s => categorize(s) === "company");
+    const expandedScouts = scouts.filter(s => categorize(s) === "emerging");
 
     // Column 1: Auto-generated (left)
     autoScouts.forEach((s, i) => {
       const y = 180 + i * 100;
-      nodes.push({ id: s.id, type: "scout", label: truncate(s.query, 38), sublabel: `${s.performance.jobsFound} jobs \u00b7 ${(s.performance.relevanceScore * 100).toFixed(0)}%`, x: 120, y, color: scoreColor(s.performance.relevanceScore), strategy: "auto" });
+      nodes.push({ id: s.id, type: "scout", label: truncate(s.query, 38), sublabel: `${s.jobsFound} jobs · ${s.yutoriScoutId ? "Yutori" : "Local"}`, x: 120, y, color: s.jobsFound > 10 ? "#10b981" : s.jobsFound > 0 ? "#f59e0b" : "#6b7280", strategy: "auto" });
       edges.push({ from: "hub", to: s.id, type: "created", animated: true });
     });
 
     // Column 2: Self-replicated (center)
     replicatedScouts.forEach((s, i) => {
       const y = 180 + i * 100;
-      nodes.push({ id: s.id, type: "scout", label: truncate(s.query, 38), sublabel: `${s.performance.jobsFound} jobs \u00b7 ${(s.performance.relevanceScore * 100).toFixed(0)}%`, x: 400, y, color: scoreColor(s.performance.relevanceScore), strategy: "replicated" });
-      const replicateEvent = events.find(e => e.type === "replicated" && s.tags.some(t => e.scoutQuery.toLowerCase().includes(t.toLowerCase())));
+      nodes.push({ id: s.id, type: "scout", label: truncate(s.query, 38), sublabel: `${s.jobsFound} jobs · ${s.targetCompanies[0] || "Yutori"}`, x: 400, y, color: s.jobsFound > 10 ? "#10b981" : s.jobsFound > 0 ? "#f59e0b" : "#6b7280", strategy: "replicated" });
+      const replicateEvent = events.find(e => e.type === "replicated" && e.scoutQuery.toLowerCase().includes(s.query.toLowerCase().slice(0, 20)));
       const parentId = replicateEvent?.parentScoutId;
       if (parentId) {
-        const parentNode = nodes.find(n => n.id.includes(parentId) || (n.type === "scout" && n.strategy === "auto"));
+        const parentNode = nodes.find(n => n.id === parentId || (n.type === "scout" && n.strategy === "auto"));
         edges.push({ from: parentNode?.id || "hub", to: s.id, type: "replicated", animated: true });
       } else {
         edges.push({ from: "hub", to: s.id, type: "replicated", animated: true });
@@ -529,7 +537,7 @@ function ScoutGraph({
     // Column 3: Expanded (right)
     expandedScouts.forEach((s, i) => {
       const y = 180 + i * 100;
-      nodes.push({ id: s.id, type: "scout", label: truncate(s.query, 38), sublabel: `${s.performance.jobsFound} jobs \u00b7 ${(s.performance.relevanceScore * 100).toFixed(0)}%`, x: 680, y, color: scoreColor(s.performance.relevanceScore), strategy: "expanded" });
+      nodes.push({ id: s.id, type: "scout", label: truncate(s.query, 38), sublabel: `${s.jobsFound} jobs · ${s.targetCompanies[0] || "Expansion"}`, x: 680, y, color: s.jobsFound > 10 ? "#10b981" : s.jobsFound > 0 ? "#f59e0b" : "#6b7280", strategy: "expanded" });
       edges.push({ from: "hub", to: s.id, type: "expanded", animated: true });
     });
 
@@ -546,18 +554,19 @@ function ScoutGraph({
     let ji = 0;
     for (const [company, data] of companyMap) {
       const jid = `job-${company.toLowerCase().replace(/\s+/g, "-")}`;
-      nodes.push({ id: jid, type: "company", label: company, sublabel: `${data.count} jobs \u00b7 ${data.avgMatch.toFixed(0)}% avg`, x: Math.min(80 + ji * 120, 720), y: jobY, color: data.avgMatch >= 80 ? "#10b981" : data.avgMatch >= 60 ? "#f59e0b" : "#6b7280" });
+      nodes.push({ id: jid, type: "company", label: company, sublabel: `${data.count} jobs · ${data.avgMatch.toFixed(0)}% avg`, x: Math.min(80 + ji * 120, 720), y: jobY, color: data.avgMatch >= 80 ? "#10b981" : data.avgMatch >= 60 ? "#f59e0b" : "#6b7280" });
+      // Link companies to scouts by targetCompanies or query match
       for (const s of scouts) {
-        if (s.tags.some(t => company.toLowerCase().includes(t)) || s.query.toLowerCase().includes(company.toLowerCase())) {
+        if (s.targetCompanies.some(t => t.toLowerCase() === company.toLowerCase()) || s.query.toLowerCase().includes(company.toLowerCase())) {
           edges.push({ from: s.id, to: jid, type: "discovered" });
         }
       }
       ji++;
     }
 
-    // Retired nodes
+    // Retired / paused nodes
     retiredScouts.forEach((s, i) => {
-      nodes.push({ id: `retired-${s.id}`, type: "retired", label: truncate(s.query, 30), sublabel: `Retired \u00b7 ${s.performance.jobsFound} jobs`, x: 680, y: jobY + 80 + i * 60, color: "#374151" });
+      nodes.push({ id: `retired-${s.id}`, type: "retired", label: truncate(s.query, 30), sublabel: `${s.status === "paused" ? "Paused" : "Error"} · ${s.jobsFound} jobs`, x: 680, y: jobY + 80 + i * 60, color: "#374151" });
       edges.push({ from: "hub", to: `retired-${s.id}`, type: "retired" });
     });
 
@@ -572,10 +581,10 @@ function ScoutGraph({
         <span className="text-slate-400 font-semibold uppercase tracking-wider">Scout Pipeline Graph</span>
         <div className="flex items-center gap-4 ml-auto text-slate-500">
           <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-indigo-500" /> Engine</span>
-          <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-cyan-400" /> Auto</span>
-          <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-purple-400" /> Replicated</span>
-          <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-amber-400" /> Expanded</span>
-          <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-emerald-400" /> Company</span>
+          <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-cyan-400" /> General</span>
+          <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-purple-400" /> Target Companies</span>
+          <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-amber-400" /> Emerging</span>
+          <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-emerald-400" /> Jobs</span>
           <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-slate-600" /> Retired</span>
         </div>
       </div>
@@ -587,9 +596,9 @@ function ScoutGraph({
           </defs>
 
           {/* Column labels */}
-          <text x="120" y="145" textAnchor="middle" className="fill-slate-600 text-[10px] font-semibold uppercase">Auto-Generated</text>
-          <text x="400" y="145" textAnchor="middle" className="fill-slate-600 text-[10px] font-semibold uppercase">Self-Replicated</text>
-          <text x="680" y="145" textAnchor="middle" className="fill-slate-600 text-[10px] font-semibold uppercase">Network Expansion</text>
+          <text x="120" y="145" textAnchor="middle" className="fill-slate-600 text-[10px] font-semibold uppercase">General Role Search</text>
+          <text x="400" y="145" textAnchor="middle" className="fill-slate-600 text-[10px] font-semibold uppercase">Target Companies</text>
+          <text x="680" y="145" textAnchor="middle" className="fill-slate-600 text-[10px] font-semibold uppercase">Emerging Ops</text>
 
           {/* Edges */}
           {graphData.edges.map((edge, i) => {
@@ -637,8 +646,6 @@ function ScoutGraph({
                   <circle cx="-68" cy="0" r="6" fill={node.color} />
                   <text x="5" y="-5" textAnchor="middle" className="fill-slate-200 text-[9px]">{node.label}</text>
                   <text x="5" y="10" textAnchor="middle" className="fill-slate-500 text-[8px]">{node.sublabel}</text>
-                  {node.strategy === "replicated" && <g transform="translate(70,-22)"><rect x="-14" y="-6" width="28" height="12" rx="6" fill="#a855f7" opacity="0.8" /><text x="0" y="2" textAnchor="middle" className="fill-white text-[7px] font-bold">DNA</text></g>}
-                  {node.strategy === "expanded" && <g transform="translate(70,-22)"><rect x="-12" y="-6" width="24" height="12" rx="6" fill="#f59e0b" opacity="0.8" /><text x="0" y="2" textAnchor="middle" className="fill-white text-[7px] font-bold">NEW</text></g>}
                 </g>
               ) : node.type === "company" ? (
                 <g>
@@ -676,9 +683,9 @@ function timeAgo(d: string) { const m = Math.floor((Date.now() - new Date(d).get
 // SCOUT FLEET
 // ═══════════════════════════════════════════════════════════════════════
 
-function ScoutFleet({ scouts, retiredScouts }: { scouts: MemoryScout[]; retiredScouts: MemoryScout[] }) {
-  const sLabel = (s: string) => s.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
-  const sColor = (s: string) => {
+function ScoutFleet({ scouts, retiredScouts }: { scouts: Scout[]; retiredScouts: Scout[] }) {
+  const sLabel = (s?: string) => (s || "auto_generated").replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+  const sColor = (s?: string) => {
     if (s === "self_replicated") return "bg-purple-500/15 text-purple-400 border-purple-500/20";
     if (s === "network_expansion") return "bg-amber-500/15 text-amber-400 border-amber-500/20";
     if (s === "skill_based") return "bg-cyan-500/15 text-cyan-400 border-cyan-500/20";
@@ -694,32 +701,31 @@ function ScoutFleet({ scouts, retiredScouts }: { scouts: MemoryScout[]; retiredS
               <div className="flex items-center gap-2 mb-2">
                 <div className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
                 <span className={`text-[10px] px-2 py-0.5 rounded-full border ${sColor(scout.strategy)}`}>{sLabel(scout.strategy)}</span>
-                {scout.strategy === "self_replicated" && <span className="text-[10px] px-1.5 py-0.5 bg-purple-500/10 text-purple-300 rounded flex items-center gap-1"><GitBranch className="w-2.5 h-2.5" /> Self-Replicated</span>}
-                {scout.strategy === "network_expansion" && <span className="text-[10px] px-1.5 py-0.5 bg-amber-500/10 text-amber-300 rounded flex items-center gap-1"><Sparkles className="w-2.5 h-2.5" /> AI Expanded</span>}
-                {scout.performance.lastEvaluated && <span className="text-[10px] text-slate-600">Evaluated {new Date(scout.performance.lastEvaluated).toLocaleDateString()}</span>}
+                {scout.yutoriScoutId && <span className="text-[10px] text-cyan-400/70 flex items-center gap-0.5"><Radio className="w-2.5 h-2.5" /> {scout.yutoriScoutId.slice(0, 8)}</span>}
               </div>
               <p className="text-sm text-white leading-relaxed mb-2">{scout.query}</p>
               <div className="flex items-center gap-3 flex-wrap">
-                {scout.tags.slice(0, 5).map(tag => <span key={tag} className="inline-flex items-center gap-1 text-[10px] text-slate-500"><Tag className="w-2.5 h-2.5" /> {tag}</span>)}
+                {scout.targetCompanies.slice(0, 5).map(company => <span key={company} className="inline-flex items-center gap-1 text-[10px] text-slate-500"><Tag className="w-2.5 h-2.5" /> {company}</span>)}
+                <span className="text-[10px] text-slate-600">{scout.interval / 60}m interval</span>
               </div>
             </div>
             <div className="text-right flex-shrink-0 space-y-1">
-              <div className="flex items-center gap-1 justify-end"><Briefcase className="w-3 h-3 text-slate-500" /><span className="text-sm font-semibold text-white">{scout.performance.jobsFound}</span><span className="text-[10px] text-slate-500">jobs</span></div>
-              <div className="flex items-center gap-1 justify-end"><Target className="w-3 h-3 text-slate-500" /><span className="text-sm font-semibold" style={{ color: scoreColor(scout.performance.relevanceScore) }}>{(scout.performance.relevanceScore * 100).toFixed(0)}%</span></div>
-              <div className="flex items-center gap-0.5 justify-end pt-1">{Array.from({ length: 5 }, (_, i) => <div key={i} className={`w-1.5 h-4 rounded-sm ${i < scout.priority ? "bg-indigo-400" : "bg-slate-700"}`} />)}</div>
-              {scout.lastActive && <p className="text-[10px] text-slate-600 pt-0.5"><Timer className="w-2.5 h-2.5 inline mr-0.5" />{timeAgo(scout.lastActive)}</p>}
+              <div className="flex items-center gap-1 justify-end"><Briefcase className="w-3 h-3 text-slate-500" /><span className="text-sm font-semibold text-white">{scout.jobsFound}</span><span className="text-[10px] text-slate-500">jobs</span></div>
+              <div className="flex items-center gap-1 justify-end"><Target className="w-3 h-3 text-slate-500" /><span className="text-sm font-semibold text-emerald-400">{scout.status}</span></div>
+              {scout.lastRun && <p className="text-[10px] text-slate-600 pt-0.5"><Timer className="w-2.5 h-2.5 inline mr-0.5" />{timeAgo(scout.lastRun)}</p>}
+              {scout.createdAt && <p className="text-[10px] text-slate-600">Created {timeAgo(scout.createdAt)}</p>}
             </div>
           </div>
         </div>
       ))}
       {retiredScouts.length > 0 && (
         <details className="mt-3">
-          <summary className="text-xs text-slate-500 cursor-pointer hover:text-slate-400 flex items-center gap-1"><ChevronRight className="w-3 h-3" />{retiredScouts.length} retired scouts</summary>
+          <summary className="text-xs text-slate-500 cursor-pointer hover:text-slate-400 flex items-center gap-1"><ChevronRight className="w-3 h-3" />{retiredScouts.length} paused/error scouts</summary>
           <div className="space-y-2 mt-2 opacity-50">
             {retiredScouts.map(s => (
               <div key={s.id} className="bg-slate-800/50 rounded-lg border border-slate-700/50 p-3 flex items-center justify-between">
-                <div><p className="text-xs text-slate-500">{s.query}</p><p className="text-[10px] text-slate-600">{s.performance.jobsFound} jobs &middot; {(s.performance.relevanceScore * 100).toFixed(0)}% relevance</p></div>
-                <span className="text-[10px] px-2 py-0.5 bg-red-500/10 text-red-400 rounded-full">Retired</span>
+                <div><p className="text-xs text-slate-500">{s.query}</p><p className="text-[10px] text-slate-600">{s.jobsFound} jobs &middot; {s.status}</p></div>
+                <span className="text-[10px] px-2 py-0.5 bg-red-500/10 text-red-400 rounded-full">{s.status === "paused" ? "Paused" : "Error"}</span>
               </div>
             ))}
           </div>
@@ -797,7 +803,7 @@ function LifecycleTimeline({ events }: { events: LifecycleEvent[] }) {
   }
 
   const eBadge = (t: string) => {
-    const map: Record<string, string> = { created: "bg-cyan-500/10 text-cyan-400", replicated: "bg-purple-500/10 text-purple-400", expanded: "bg-amber-500/10 text-amber-400", optimized: "bg-blue-500/10 text-blue-400", retired: "bg-red-500/10 text-red-400", job_found: "bg-emerald-500/10 text-emerald-400", evaluated: "bg-indigo-500/10 text-indigo-400" };
+    const map: Record<string, string> = { created: "bg-cyan-500/10 text-cyan-400", optimized: "bg-blue-500/10 text-blue-400", retired: "bg-red-500/10 text-red-400", job_found: "bg-emerald-500/10 text-emerald-400", evaluated: "bg-indigo-500/10 text-indigo-400" };
     return map[t] || "bg-slate-700 text-slate-400";
   };
 
@@ -805,8 +811,6 @@ function LifecycleTimeline({ events }: { events: LifecycleEvent[] }) {
     const base = "w-5 h-5 rounded-full flex items-center justify-center";
     const map: Record<string, { cls: string; icon: React.ReactNode }> = {
       created: { cls: `${base} bg-cyan-500/15`, icon: <Zap className="w-2.5 h-2.5 text-cyan-400" /> },
-      replicated: { cls: `${base} bg-purple-500/15`, icon: <GitBranch className="w-2.5 h-2.5 text-purple-400" /> },
-      expanded: { cls: `${base} bg-amber-500/15`, icon: <Sparkles className="w-2.5 h-2.5 text-amber-400" /> },
       optimized: { cls: `${base} bg-blue-500/15`, icon: <RefreshCw className="w-2.5 h-2.5 text-blue-400" /> },
       retired: { cls: `${base} bg-red-500/15`, icon: <AlertTriangle className="w-2.5 h-2.5 text-red-400" /> },
       job_found: { cls: `${base} bg-emerald-500/15`, icon: <Briefcase className="w-2.5 h-2.5 text-emerald-400" /> },

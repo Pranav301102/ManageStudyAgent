@@ -97,6 +97,7 @@ export interface Scout {
   targetCompanies: string[];
   interval: number; // seconds
   status: ScoutStatus;
+  strategy?: string; // exact_match, skill_based, adjacent_role, etc.
   lastRun?: string;
   jobsFound: number;
   createdAt: string;

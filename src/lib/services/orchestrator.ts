@@ -121,6 +121,7 @@ export async function autoGenerateScouts(): Promise<Scout[]> {
         targetCompanies: [],
         interval: 1800,
         status: "active",
+        strategy: sq.strategy,
         jobsFound: 0,
         createdAt: new Date().toISOString(),
       };
@@ -138,6 +139,7 @@ export async function autoGenerateScouts(): Promise<Scout[]> {
         targetCompanies: [],
         interval: 1800,
         status: "error",
+        strategy: sq.strategy,
         jobsFound: 0,
         createdAt: new Date().toISOString(),
       };

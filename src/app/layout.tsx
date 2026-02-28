@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "CareerAdvocate — AI-Powered Career Agent",
+  title: "HireNodes — AI-Powered Career Agent",
   description: "Autonomous agent: job discovery → company research → skill gap analysis → voice mock interview",
 };
 

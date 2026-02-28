@@ -54,7 +54,7 @@ export default function LoginPage() {
                 <Link href="/" className="flex items-center gap-2 justify-center mb-10">
                     <Radar className="w-8 h-8 text-indigo-400" />
                     <span className="text-xl font-bold text-white tracking-tight">
-                        CareerAdvocate
+                        HireNodes
                     </span>
                 </Link>
 

@@ -383,6 +383,7 @@ async function replicateFromDiscoveries(
         targetCompanies: [job.company],
         interval: 1800,
         status: "active",
+        strategy: "self_replicated",
         jobsFound: 0,
         createdAt: new Date().toISOString(),
       };
@@ -472,6 +473,7 @@ async function expandNetwork(
           targetCompanies: [suggestion.company],
           interval: 3600,
           status: "active",
+          strategy: "network_expansion",
           jobsFound: 0,
           createdAt: new Date().toISOString(),
         };

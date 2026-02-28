@@ -57,7 +57,7 @@ const DEMO_SCOUTS: Omit<Scout, "id">[] = [
     lastRun: "2026-02-27T08:00:00Z",
   },
   {
-    query: "Expansion: Monitor Anthropic — leading AI safety company hiring ML engineers",
+    query: "Monitor Anthropic — leading AI safety company hiring ML engineers",
     targetCompanies: ["Anthropic"],
     interval: 3600,
     status: "active",
@@ -456,7 +456,7 @@ const DEMO_JOBS: Omit<Job, "id">[] = [
 export interface ScoutLifecycleEvent {
   id: string;
   timestamp: string;
-  type: "created" | "optimized" | "replicated" | "retired" | "expanded" | "job_found" | "evaluated";
+  type: "created" | "optimized" | "retired" | "job_found" | "evaluated";
   scoutId: string;
   scoutQuery: string;
   parentScoutId?: string;
@@ -474,21 +474,21 @@ const DEMO_LIFECYCLE_EVENTS: ScoutLifecycleEvent[] = [
   // Day 2 — More jobs
   { id: "evt-5", timestamp: "2026-02-21T09:00:00Z", type: "job_found", scoutId: "scout-ml", scoutQuery: "ML Engineer Intern", details: "Cohere — ML Research Intern (match: 63%)", impact: 63 },
   { id: "evt-6", timestamp: "2026-02-21T15:00:00Z", type: "evaluated", scoutId: "scout-main", scoutQuery: "SE Intern", details: "Lifecycle evaluated: relevance 0.78, 3 jobs found", impact: 78 },
-  // Day 2 — Self-replication triggered
+  // Day 2 — High value hits
   { id: "evt-7", timestamp: "2026-02-22T11:00:00Z", type: "job_found", scoutId: "scout-main", scoutQuery: "SE Intern", details: "Parallel — SE Intern Platform (match: 88%) HIGH VALUE", impact: 88 },
-  { id: "evt-8", timestamp: "2026-02-22T14:00:00Z", type: "replicated", scoutId: "scout-stripe", scoutQuery: "Monitor Stripe careers — engineering internships", parentScoutId: "scout-backend", details: "🧬 Self-replicated from backend scout after Stripe job hit", impact: 82 },
-  { id: "evt-9", timestamp: "2026-02-22T14:05:00Z", type: "replicated", scoutId: "scout-vercel", scoutQuery: "Monitor Vercel careers — Next.js, React", parentScoutId: "scout-backend", details: "🧬 Self-replicated from backend scout after Vercel discovery", impact: 85 },
+  { id: "evt-8", timestamp: "2026-02-22T14:00:00Z", type: "created", scoutId: "scout-stripe", scoutQuery: "Monitor Stripe careers — engineering internships", details: "AI auto-generated company-specific scout", impact: 82 },
+  { id: "evt-9", timestamp: "2026-02-22T14:05:00Z", type: "created", scoutId: "scout-vercel", scoutQuery: "Monitor Vercel careers — Next.js, React", details: "AI auto-generated company-specific scout", impact: 85 },
   // Day 3 — Optimization
   { id: "evt-10", timestamp: "2026-02-23T08:00:00Z", type: "evaluated", scoutId: "scout-backend", scoutQuery: "Backend Engineer", details: "Lifecycle evaluated: relevance 0.55 — needs optimization", impact: 55 },
   { id: "evt-11", timestamp: "2026-02-23T08:15:00Z", type: "optimized", scoutId: "scout-backend", scoutQuery: "Backend Engineer — Node.js, FastAPI, PostgreSQL, Docker, microservices", details: "LLM rewrote query: added Docker + microservices keywords", impact: 72 },
   { id: "evt-12", timestamp: "2026-02-23T09:00:00Z", type: "job_found", scoutId: "scout-backend", scoutQuery: "Backend Engineer", details: "Supabase — Backend Engineer (match: 74%)", impact: 74 },
   // Day 3 — Retired underperformers
   { id: "evt-13", timestamp: "2026-02-23T12:00:00Z", type: "retired", scoutId: "scout-java", scoutQuery: "Junior Java Developer — Spring Boot", details: "Retired: relevance 0.18, only 1 job found in 3 days", impact: 18 },
-  // Day 4 — Network expansion
-  { id: "evt-14", timestamp: "2026-02-24T09:00:00Z", type: "expanded", scoutId: "scout-anthropic", scoutQuery: "Expansion: Monitor Anthropic — AI safety company", details: "🌱 LLM suggested Anthropic as emerging AI company worth monitoring", impact: 90 },
+  // Day 4 — Emerging company scout
+  { id: "evt-14", timestamp: "2026-02-24T09:00:00Z", type: "created", scoutId: "scout-anthropic", scoutQuery: "Monitor Anthropic — AI safety company", details: "AI auto-generated company-specific scout", impact: 90 },
   { id: "evt-15", timestamp: "2026-02-24T10:00:00Z", type: "job_found", scoutId: "scout-anthropic", scoutQuery: "Anthropic", details: "Anthropic — ML Engineer Intern (match: 68%)", impact: 68 },
-  // Day 5 — More replication
-  { id: "evt-16", timestamp: "2026-02-25T11:00:00Z", type: "replicated", scoutId: "scout-supabase", scoutQuery: "Monitor Supabase careers — backend & DevOps", parentScoutId: "scout-backend", details: "🧬 Self-replicated after high-value Supabase hit", impact: 74 },
+  // Day 5 — More company scouts
+  { id: "evt-16", timestamp: "2026-02-25T11:00:00Z", type: "created", scoutId: "scout-supabase", scoutQuery: "Monitor Supabase careers — backend & DevOps", details: "AI auto-generated company-specific scout", impact: 74 },
   { id: "evt-17", timestamp: "2026-02-25T14:30:00Z", type: "job_found", scoutId: "scout-stripe", scoutQuery: "Stripe", details: "Stripe — Software Engineering Intern (match: 82%) HIGH VALUE", impact: 82 },
   // Day 6 — Evaluation cycle
   { id: "evt-18", timestamp: "2026-02-26T08:00:00Z", type: "evaluated", scoutId: "scout-stripe", scoutQuery: "Stripe", details: "Lifecycle evaluated: relevance 0.89, 4 jobs found — excellent", impact: 89 },
@@ -565,10 +565,10 @@ export async function POST() {
       { id: "s1", query: "SE Intern at Parallel, Modular, Concora Credit", strategy: "exact_match", source: "auto" as const, performance: { relevanceScore: 0.85, jobsFound: 12, lastEvaluated: "2026-02-27T08:00:00Z" }, tags: ["se-intern", "target-companies"], priority: 5, createdAt: "2026-02-20T10:00:00Z", lastActive: "2026-02-27T08:30:00Z", status: "active" as const },
       { id: "s2", query: "ML Engineer Intern — PyTorch, TensorFlow", strategy: "skill_based", source: "auto" as const, performance: { relevanceScore: 0.72, jobsFound: 8, lastEvaluated: "2026-02-26T08:00:00Z" }, tags: ["ml", "ai", "pytorch"], priority: 4, createdAt: "2026-02-20T10:05:00Z", lastActive: "2026-02-27T07:15:00Z", status: "active" as const },
       { id: "s3", query: "Backend Engineer — Node.js, FastAPI, PostgreSQL, Docker", strategy: "skill_based", source: "auto" as const, performance: { relevanceScore: 0.72, jobsFound: 15, lastEvaluated: "2026-02-26T08:00:00Z" }, tags: ["backend", "node", "fastapi"], priority: 4, createdAt: "2026-02-20T10:10:00Z", lastActive: "2026-02-27T09:00:00Z", status: "active" as const },
-      { id: "s4", query: "Monitor Stripe careers", strategy: "self_replicated", source: "auto" as const, performance: { relevanceScore: 0.89, jobsFound: 4, lastEvaluated: "2026-02-26T08:00:00Z" }, tags: ["stripe", "auto-spawned"], priority: 4, createdAt: "2026-02-22T14:00:00Z", lastActive: "2026-02-27T06:45:00Z", status: "active" as const },
-      { id: "s5", query: "Monitor Vercel careers", strategy: "self_replicated", source: "auto" as const, performance: { relevanceScore: 0.92, jobsFound: 6, lastEvaluated: "2026-02-26T08:05:00Z" }, tags: ["vercel", "auto-spawned"], priority: 5, createdAt: "2026-02-22T14:05:00Z", lastActive: "2026-02-27T08:00:00Z", status: "active" as const },
-      { id: "s6", query: "Expansion: Monitor Anthropic", strategy: "network_expansion", source: "auto" as const, performance: { relevanceScore: 0.73, jobsFound: 3, lastEvaluated: "2026-02-27T08:05:00Z" }, tags: ["anthropic", "expansion"], priority: 3, createdAt: "2026-02-24T09:00:00Z", lastActive: "2026-02-27T05:30:00Z", status: "active" as const },
-      { id: "s7", query: "Monitor Supabase careers", strategy: "self_replicated", source: "auto" as const, performance: { relevanceScore: 0.68, jobsFound: 2 }, tags: ["supabase", "auto-spawned"], priority: 3, createdAt: "2026-02-25T11:00:00Z", lastActive: "2026-02-27T04:00:00Z", status: "active" as const },
+      { id: "s4", query: "Monitor Stripe careers", strategy: "company_focused", source: "auto" as const, performance: { relevanceScore: 0.89, jobsFound: 4, lastEvaluated: "2026-02-26T08:00:00Z" }, tags: ["stripe", "auto-spawned"], priority: 4, createdAt: "2026-02-22T14:00:00Z", lastActive: "2026-02-27T06:45:00Z", status: "active" as const },
+      { id: "s5", query: "Monitor Vercel careers", strategy: "company_focused", source: "auto" as const, performance: { relevanceScore: 0.92, jobsFound: 6, lastEvaluated: "2026-02-26T08:05:00Z" }, tags: ["vercel", "auto-spawned"], priority: 5, createdAt: "2026-02-22T14:05:00Z", lastActive: "2026-02-27T08:00:00Z", status: "active" as const },
+      { id: "s6", query: "Monitor Anthropic", strategy: "company_focused", source: "auto" as const, performance: { relevanceScore: 0.73, jobsFound: 3, lastEvaluated: "2026-02-27T08:05:00Z" }, tags: ["anthropic"], priority: 3, createdAt: "2026-02-24T09:00:00Z", lastActive: "2026-02-27T05:30:00Z", status: "active" as const },
+      { id: "s7", query: "Monitor Supabase careers", strategy: "company_focused", source: "auto" as const, performance: { relevanceScore: 0.68, jobsFound: 2 }, tags: ["supabase", "auto-spawned"], priority: 3, createdAt: "2026-02-25T11:00:00Z", lastActive: "2026-02-27T04:00:00Z", status: "active" as const },
       { id: "s8", query: "Junior Java Developer — Spring Boot", strategy: "exact_match", source: "auto" as const, performance: { relevanceScore: 0.18, jobsFound: 1 }, tags: ["java"], priority: 2, createdAt: "2026-02-20T10:15:00Z", status: "retired" as const },
       { id: "s9", query: "DevOps roles — AWS, GCP, Terraform", strategy: "broad_search", source: "auto" as const, performance: { relevanceScore: 0, jobsFound: 0 }, tags: ["devops"], priority: 1, createdAt: "2026-02-21T08:00:00Z", status: "retired" as const },
     ];
@@ -586,7 +586,6 @@ export async function POST() {
         optimized: 0,
         retired: 1,
         spawned: 0,
-        expanded: 0,
         errors: [],
       },
     };

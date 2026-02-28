@@ -129,7 +129,7 @@ An end-to-end autonomous agent that monitors the live job market, discovers matc
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│  ◉ CareerAdvocate    [Dashboard] [Skill Graph] [Interviews] [⚙]   │
+│  ◉ HireNodes         [Dashboard] [Skill Graph] [Interviews] [⚙]   │
 ├─────────────────────────────────────────────────────────────────────┤
 │                                                                     │
 │  ┌─────────────────────────────┐  ┌──────────────────────────────┐ │

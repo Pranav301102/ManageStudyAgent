@@ -85,6 +85,7 @@ export async function POST(request: NextRequest) {
             targetCompanies: [],
             interval: 3600,
             status: "active",
+            strategy,
             jobsFound: 0,
             createdAt: new Date().toISOString(),
           };

@@ -51,7 +51,7 @@ export default function Sidebar() {
         <Radar className="w-7 h-7 text-indigo-400 flex-shrink-0" />
         {!collapsed && (
           <span className="text-lg font-bold text-white tracking-tight">
-            CareerAdvocate
+            HireNodes
           </span>
         )}
       </Link>
