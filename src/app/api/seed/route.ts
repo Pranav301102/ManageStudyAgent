@@ -6,6 +6,7 @@ import { v4 as uuid } from "uuid";
 import { addJob, addScout, addApplication, addPerformanceSnapshot, store } from "@/lib/store";
 import { Job, Scout, Application, PerformanceSnapshot, StudyBlock, StudySchedule, DailyChallenge } from "@/lib/types";
 import * as memoryLibrary from "@/lib/services/memory-library";
+import * as resumeAlignment from "@/lib/services/resume-alignment";
 
 // ─── Demo Scouts ─────────────────────────────────────────────────────
 
@@ -722,6 +723,86 @@ export async function POST() {
     };
     store.dailyChallenge = demoChallenge;
 
+    // 9. Seed default resume
+    const defaultResume = `ALEX CHEN
+San Francisco, CA | alex.chen@email.com | github.com/alexchen | linkedin.com/in/alexchen
+
+EDUCATION
+University of California, Berkeley — B.S. Computer Science (Expected May 2027)
+GPA: 3.8/4.0 | Dean's List (4 semesters)
+Relevant Coursework: Data Structures & Algorithms, Operating Systems, Database Systems, Machine Learning, Distributed Systems, Software Engineering
+
+TECHNICAL SKILLS
+Languages: Python, TypeScript, JavaScript, Java, SQL, Go (learning)
+Frameworks: React, Next.js, Node.js, FastAPI, Express.js, Flask
+Databases: PostgreSQL, MongoDB, Redis, SQLite
+Cloud & DevOps: AWS (EC2, S3, Lambda), Docker, Git, GitHub Actions, Vercel
+ML/AI: PyTorch, scikit-learn, pandas, NumPy, Hugging Face Transformers
+Tools: VS Code, Figma, Postman, Jira, Linear
+
+EXPERIENCE
+Software Engineering Intern — TechStartup Inc. (Summer 2025)
+• Developed a real-time notification microservice using Node.js and Redis Pub/Sub, reducing notification latency by 40%
+• Built a React dashboard with TypeScript for monitoring 50+ API endpoints, used by 15 engineers daily
+• Implemented RESTful APIs with Express.js and PostgreSQL, handling 10K+ daily requests with 99.9% uptime
+• Wrote comprehensive unit and integration tests with Jest, achieving 92% code coverage
+• Participated in agile sprints, code reviews, and architectural design discussions
+
+Research Assistant — UC Berkeley AI Lab (Fall 2024 - Present)
+• Building NLP pipeline for automated research paper classification using Python and PyTorch
+• Fine-tuned BERT model on domain-specific dataset of 50K papers, achieving 89% F1 score
+• Developed data preprocessing pipeline with pandas processing 100K+ documents
+• Collaborating with PhD students on novel attention mechanism for long-document understanding
+
+PROJECTS
+TaskFlow — Full-Stack Project Management App (github.com/alexchen/taskflow)
+• Built with Next.js 14, TypeScript, PostgreSQL, and Tailwind CSS — deployed on Vercel
+• Implemented real-time collaboration with WebSocket, supporting 20+ concurrent users
+• Designed and normalized PostgreSQL schema with 12 tables and optimized queries using indexes
+• Added GitHub OAuth authentication and role-based access control
+
+ML Job Matcher — Intelligent Job Recommendation System
+• Trained a recommendation model using collaborative filtering on 100K+ job postings dataset
+• Built FastAPI backend serving predictions with <200ms latency
+• Created React frontend with interactive skill-gap visualization using D3.js
+• Deployed with Docker on AWS EC2 with CI/CD via GitHub Actions
+
+LEADERSHIP & ACTIVITIES
+• Teaching Assistant — CS 61B (Data Structures), UC Berkeley (Spring 2025)
+• President — Berkeley AI Student Club (2024-Present), organized 12 workshops with 200+ attendees
+• Hackathon Winner — CalHacks 2024, built an AI-powered study planner (1st place, Education track)`;
+
+    resumeAlignment.saveDefaultResume(defaultResume);
+    store.profile.resumeSummary = defaultResume.slice(0, 500);
+
+    // 10. Seed user profile with better data
+    store.profile.name = "Alex Chen";
+    store.profile.email = "alex.chen@email.com";
+    store.profile.skills = [
+      { name: "Python", proficiencyLevel: 4, yearsExperience: 3, category: "language" },
+      { name: "TypeScript", proficiencyLevel: 4, yearsExperience: 2, category: "language" },
+      { name: "JavaScript", proficiencyLevel: 4, yearsExperience: 3, category: "language" },
+      { name: "Java", proficiencyLevel: 3, yearsExperience: 2, category: "language" },
+      { name: "SQL", proficiencyLevel: 3, yearsExperience: 2, category: "language" },
+      { name: "React", proficiencyLevel: 4, yearsExperience: 2, category: "framework" },
+      { name: "Next.js", proficiencyLevel: 3, yearsExperience: 1, category: "framework" },
+      { name: "Node.js", proficiencyLevel: 4, yearsExperience: 2, category: "framework" },
+      { name: "FastAPI", proficiencyLevel: 3, yearsExperience: 1, category: "framework" },
+      { name: "Express.js", proficiencyLevel: 3, yearsExperience: 2, category: "framework" },
+      { name: "PostgreSQL", proficiencyLevel: 3, yearsExperience: 2, category: "tool" },
+      { name: "MongoDB", proficiencyLevel: 2, yearsExperience: 1, category: "tool" },
+      { name: "Redis", proficiencyLevel: 2, yearsExperience: 1, category: "tool" },
+      { name: "Docker", proficiencyLevel: 2, yearsExperience: 1, category: "tool" },
+      { name: "AWS", proficiencyLevel: 2, yearsExperience: 1, category: "tool" },
+      { name: "Git", proficiencyLevel: 4, yearsExperience: 3, category: "tool" },
+      { name: "PyTorch", proficiencyLevel: 2, yearsExperience: 1, category: "framework" },
+      { name: "Machine Learning", proficiencyLevel: 2, yearsExperience: 1, category: "concept" },
+      { name: "REST APIs", proficiencyLevel: 4, yearsExperience: 2, category: "concept" },
+      { name: "Data Structures", proficiencyLevel: 4, yearsExperience: 3, category: "concept" },
+      { name: "Algorithms", proficiencyLevel: 3, yearsExperience: 2, category: "concept" },
+      { name: "System Design", proficiencyLevel: 2, yearsExperience: 1, category: "concept" },
+    ];
+
     return NextResponse.json({
       success: true,
       data: {
@@ -732,7 +813,7 @@ export async function POST() {
         studyBlocks: demoStudyPlan.length,
         sourcesSeeded: library.discoveredSources.length,
         lifecycleEvents: DEMO_LIFECYCLE_EVENTS.length,
-        message: `Seeded ${DEMO_SCOUTS.length} scouts, ${DEMO_JOBS.length} jobs, ${appsCreated} applications, ${demoSnapshots.length} performance snapshots, ${demoStudyPlan.length} study blocks, and ${DEMO_LIFECYCLE_EVENTS.length} lifecycle events.`,
+        message: `Seeded ${DEMO_SCOUTS.length} scouts, ${DEMO_JOBS.length} jobs, ${appsCreated} applications, ${demoSnapshots.length} performance snapshots, ${demoStudyPlan.length} study blocks, ${DEMO_LIFECYCLE_EVENTS.length} lifecycle events, and default resume.`,
       },
     });
   } catch (error) {

@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { v4 as uuid } from "uuid";
 import { store, addApplication } from "@/lib/store";
 import { Application, ApplicationStatus, ApplicationEvent } from "@/lib/types";
+import * as resumeAlignment from "@/lib/services/resume-alignment";
 
 // GET — list all applications
 export async function GET() {
@@ -43,6 +44,18 @@ export async function POST(request: NextRequest) {
 
         addApplication(app);
         job.status = "applied";
+
+        // Auto-align resume to this job's description in the background
+        const defaultResume = resumeAlignment.getDefaultResume();
+        if (defaultResume && job.description) {
+            resumeAlignment.alignResume(defaultResume, job.description, job)
+                .then((alignment) => {
+                    console.log(`[Applications API] Auto-aligned resume for ${job.title}: ATS ${alignment.atsScore}%`);
+                })
+                .catch((err) => {
+                    console.warn(`[Applications API] Auto-alignment failed for ${job.title}:`, err);
+                });
+        }
 
         return NextResponse.json({ success: true, data: app });
     } catch (err) {

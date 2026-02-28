@@ -1,8 +1,9 @@
-// ─── Pioneer Service — GLiNER-2 Cloud Inference & Fine-Tuning Pipeline ───
+// ─── Pioneer Service — GLiNER-2 NER + LLM Inference + Fine-Tuning ───
 // Full integration with Pioneer by Fastino Labs:
-//   • Cloud inference via /inference endpoint (GLiNER-2)
+//   • GLiNER-2 NER extraction via /gliner-2 endpoint
+//   • LLM inference via /inference endpoint (Llama-3.1-8B-Instruct)
 //   • Dataset management for domain-specific NER training
-//   • Model training (fine-tuning GLiNER on interview/JD data)
+//   • Model training (fine-tuning GLiNER on labeled data)
 //   • Evaluation with F1, precision, recall metrics
 //   • Deployment management for fine-tuned models
 //
@@ -14,20 +15,23 @@ import { ExtractedEntity } from "../types";
 
 // ─── Types ──────────────────────────────────────────────────────────
 
-interface PioneerInferenceRequest {
-    model_id: string;
-    task: "extract_entities" | "classify" | "extract_relations";
-    text: string;
-    schema: string[];
-    threshold?: number;
+interface PioneerGlinerResponse {
+    result: {
+        entities: Record<string, string[]>;
+    };
+    token_usage: number;
 }
 
-interface PioneerInferenceResponse {
-    entities: Array<{ text: string; label: string; score: number }>;
+interface PioneerLLMMessage {
+    role: "system" | "user" | "assistant";
+    content: string;
+}
+
+interface PioneerLLMResponse {
+    type: string;
+    completion: string;
     model_id: string;
     latency_ms: number;
-    tokens_in: number;
-    tokens_out: number;
 }
 
 interface PioneerDataset {
@@ -104,8 +108,8 @@ async function pioneerFetch<T>(
 // Also used for interview answer classification and entity extraction
 
 /**
- * Run GLiNER-2 cloud inference via Pioneer.
- * ~130ms latency, supports any custom entity labels.
+ * Run GLiNER-2 cloud inference via Pioneer /gliner-2 endpoint.
+ * Returns extracted entities from text using the provided schema labels.
  */
 export async function inference(
     text: string,
@@ -117,29 +121,66 @@ export async function inference(
         return [];
     }
 
-    const modelId = options?.modelId || config.pioneer.modelId;
-
-    const response = await pioneerFetch<PioneerInferenceResponse>("/inference", {
+    const response = await pioneerFetch<PioneerGlinerResponse>("/gliner-2", {
         method: "POST",
         body: JSON.stringify({
-            model_id: modelId,
             task: "extract_entities",
             text,
             schema,
             threshold: options?.threshold ?? 0.4,
-        } satisfies PioneerInferenceRequest),
+        }),
+    });
+
+    // Parse the { result: { entities: { label: [text, ...] } } } format
+    const entities: ExtractedEntity[] = [];
+    if (response.result?.entities) {
+        for (const [label, texts] of Object.entries(response.result.entities)) {
+            for (const t of texts) {
+                entities.push({ text: t, label, score: 0.85 });
+            }
+        }
+    }
+
+    console.log(
+        `[Pioneer] GLiNER-2: ${entities.length} entities, ` +
+        `${response.token_usage} tokens`
+    );
+
+    return entities;
+}
+
+// ─── LLM Inference (Llama-3.1-8B-Instruct) ─────────────────────────
+// Text generation via Pioneer's /inference endpoint.
+// Used for resume rewriting, readability scoring, and general NLP tasks.
+
+/**
+ * Generate text via Pioneer's Llama-3.1-8B-Instruct model.
+ * Sends a chat-style message array and returns the completion string.
+ */
+export async function generate(
+    messages: PioneerLLMMessage[],
+    options?: { maxTokens?: number; temperature?: number }
+): Promise<string> {
+    if (!PIONEER_KEY) {
+        throw new Error("[Pioneer] No API key — cannot run LLM inference");
+    }
+
+    const response = await pioneerFetch<PioneerLLMResponse>("/inference", {
+        method: "POST",
+        body: JSON.stringify({
+            model_id: "base:meta-llama/Llama-3.1-8B-Instruct",
+            task: "generate",
+            messages,
+            max_tokens: options?.maxTokens ?? 3000,
+        }),
     });
 
     console.log(
-        `[Pioneer] Inference: ${response.entities.length} entities, ` +
-        `${response.latency_ms}ms, model=${response.model_id}`
+        `[Pioneer] LLM: ${response.completion.length} chars, ` +
+        `${response.latency_ms.toFixed(0)}ms latency`
     );
 
-    return response.entities.map((e) => ({
-        text: e.text,
-        label: e.label,
-        score: e.score,
-    }));
+    return response.completion;
 }
 
 /**
@@ -586,9 +627,22 @@ export async function checkHealth(): Promise<{
     }
 
     try {
-        // Quick inference test
-        await inference("test", ["test_entity"], { threshold: 0.9 });
-        return { available: true, hasApiKey: true, modelId: config.pioneer.modelId };
+        // Quick health test via /gliner-2 with minimal text
+        const res = await fetch(`${PIONEER_BASE}/gliner-2`, {
+            method: "POST",
+            headers: pioneerHeaders(),
+            body: JSON.stringify({
+                task: "extract_entities",
+                text: "Python and React developer",
+                schema: ["programming_language"],
+                threshold: 0.5,
+            }),
+            signal: AbortSignal.timeout(5000),
+        });
+        if (res.ok) {
+            return { available: true, hasApiKey: true, modelId: "gliner-2" };
+        }
+        return { available: false, hasApiKey: true, modelId: config.pioneer.modelId };
     } catch {
         return { available: false, hasApiKey: true, modelId: config.pioneer.modelId };
     }

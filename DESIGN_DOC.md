@@ -1,6 +1,12 @@
-# Autonomous Voice-Native Career Advocate — Design Document
+# HireNodes — Design Document
 
-## 1. System Overview
+The autonomous, multimodal career proxy: from passive scouting to real-time voice and whiteboard interview training.
+
+## The Elevator Pitch
+
+HireNodes is an end-to-end, self-driving career acceleration engine. It is not just another job aggregator or AI resume spinner — it is a comprehensive, multimodal training environment. HireNodes deploys persistent autonomous scouts via **Yutori's Scouting API** that monitor career pages 24/7, pull-polls for accumulated results, extracts exact skill requirements using zero-shot NER via **Pioneer's GLiNER-2**, aligns your resume with a dual-model verification loop, and then trains you to pass the interview. By combining **Reka Vision** for live whiteboard architecture analysis and **Modulate** for real-time voice and emotional intelligence tracking, HireNodes evaluates not just what you know, but how clearly and confidently you can explain it — because the best way to master a concept is to teach it to someone else.
+
+## System Overview
 
 An end-to-end autonomous agent that monitors the live job market, discovers matching roles, researches companies in real-time, maps skill gaps via a knowledge graph, and spins up a voice-based mock interview environment tailored to each discovered role — all without manual intervention.
 
@@ -25,19 +31,37 @@ An end-to-end autonomous agent that monitors the live job market, discovers matc
 
 ## 2. API Integration Details
 
-### 2.1 Yutori API — Job Discovery & Extraction
+### 2.1 Yutori API — Job Discovery, Extraction & Polling
 
 **Scouting API** (`POST https://api.yutori.com/v1/scouting/tasks`)
-- Creates persistent scouts that monitor career pages at configurable intervals (min 30 min)
-- Webhook-driven: pushes results to our backend the moment a match is found
-- Structured output via `output_schema` — extracts title, company, location, URL, posting date
+- Creates persistent scouts that monitor career pages at configurable intervals (min 30 min for creation, 1h for PATCH)
+- Structured output via `output_schema` — extracts `{ job_title, company, location, url, posted_date, brief_description }`
 - Auth: `X-API-Key` header
+- Supports query-based scouting with diverse strategies: exact_match, skill_based, adjacent_role, emerging_company, growth_role
+
+**Scout Updates API** (`GET https://api.yutori.com/v1/scouting/tasks/{id}/updates`)
+- **Pull-based polling** — since webhooks can't reach `localhost`, we poll for accumulated results
+- Returns `{ updates: [{ id, timestamp, content, structured_result, citations, stats }] }`
+- Each update's `structured_result` contains an array of jobs matching the `output_schema`
+- `processed_updates` table in SQLite tracks which update IDs have been processed (deduplication)
+- Orchestrator polls every 30 minutes via `setInterval` and on app startup
+- Lightweight bulk ingest: saves job metadata immediately, heavy enrichment (browsing, NER, gaps) runs separately
+
+**Scout List API** (`GET https://api.yutori.com/v1/scouting/tasks`)
+- Lists all scouts with `{ id, query, status, output_interval, update_count, next_output_timestamp }`
+- Used by `syncScoutsWithYutori()` to link local DB records to live Yutori scouts
+- Removes orphaned local scouts (those without a valid `yutoriScoutId`)
 
 **Browsing API** (`POST https://api.yutori.com/v1/browsing/tasks`)
-- Triggered when a scout finds a match — navigates to the actual job listing page
+- Triggered during job enrichment — navigates to the actual job listing page
 - Extracts full JD, required tech stack, qualifications, salary range, team info
 - Uses `navigator-n1-latest` agent with structured `output_schema`
 - Returns `task_id` for polling status via `GET /v1/browsing/tasks/{task_id}`
+
+**Current Deployment:**
+- 4 original active scouts (skill-based, SWE intern, ML intern, backend) + 5 diverse scouts deployed
+- 139+ real jobs ingested from 10 Yutori updates, deduplicated by URL + title/company
+- Top companies discovered: Modular, Roblox, Stripe, Databricks, Notion, Citadel
 
 ### 2.2 Tavily API — Real-Time Company Research
 
@@ -219,8 +243,8 @@ An end-to-end autonomous agent that monitors the live job market, discovers matc
 | **Voice STT** | Web Speech API | Browser-native, zero-latency |
 | **Voice TTS** | Web Speech Synthesis | Browser-native delivery |
 | **Voice Analysis** | Modulate Velma API | Sentiment, emotion, confidence scoring |
-| **Job Monitoring** | Yutori Scouting API | Continuous career page monitoring |
-| **Job Extraction** | Yutori Browsing API | Full JD navigation & extraction |
+| **Job Monitoring** | Yutori Scouting API + Pull-Polling | Continuous career page monitoring via persistent scouts; pull-based polling for results |
+| **Job Extraction** | Yutori Browsing API | Full JD navigation & extraction via headless browser agent |
 | **Company Research** | Tavily Search API | Real-time news, culture, tech stack |
 | **NER / Entity Extraction** | Pioneer GLiNER-2 (cloud, primary) + local GLiNER (fallback) | Zero-shot NER via cloud API; local Python sidecar as fallback |
 | **Fine-Tuning / MLOps** | Pioneer Felix Platform | Dataset management, model training, evaluation, deployment |
@@ -231,22 +255,31 @@ An end-to-end autonomous agent that monitors the live job market, discovers matc
 
 ```
 1. SCOUT CREATION (on startup)
-   User profile + target companies → Yutori Scouting API (webhook configured)
+   User profile + target companies → Yutori Scouting API
+   Also: syncScoutsWithYutori() links local DB to live Yutori scouts
 
-2. JOB DETECTED (webhook fires)
-   Yutori webhook → FastAPI /webhook/yutori
-   ├── Yutori Browsing API → extract full JD + tech stack
+2. JOB DISCOVERY (pull-polling, every 30 min)
+   pollAllScouts() → GET /v1/scouting/tasks/{id}/updates for each active scout
+   ├── Deduplicate by URL + title/company against existing jobs
+   ├── Lightweight bulk ingest: save all job metadata as "discovered"
+   ├── Track processed update IDs in SQLite (processed_updates table)
+   └── Update scout jobsFound counts
+
+3. JOB ENRICHMENT (separate step, on-demand or batched)
+   enrichDiscoveredJobs(limit) processes un-enriched jobs through heavy pipeline:
+   ├── Yutori Browsing API → extract full JD + tech stack from URL
+   ├── Pioneer GLiNER-2 → zero-shot NER entity extraction
    ├── Tavily Search → company news, culture, recent launches
    ├── Neo4j → compute skill gaps, match score
-   └── Store job + analysis in SQLite
+   └── Store enriched job data in SQLite
 
-3. INTERVIEW PREP (auto or manual trigger)
+4. INTERVIEW PREP (auto or manual trigger)
    Job data + Tavily intel + skill gaps → LLM prompt
    ├── Generate role-specific questions
    ├── Create scoring rubric
    └── Ready mock interview environment
 
-4. MOCK INTERVIEW (user enters voice session)
+5. MOCK INTERVIEW (user enters voice session)
    Browser mic → Web Speech API (STT) → user response text
    Browser mic → MediaRecorder → Modulate Velma (voice analysis)
    ├── LLM evaluates response content
@@ -729,5 +762,8 @@ All sponsor technologies are attributed in the UI with "Powered by [Sponsor]" ba
 | Resume ATS Optimizer | Powered by **Pioneer GLiNER-2** + **Gemini 2.5 Flash** |
 | Study Plan Generation | Powered by **Gemini** + **Pioneer** |
 | Loading States | "Powered by Pioneer GLiNER-2" |
+
+| Scout Sync & Poll | Powered by **Yutori Scouting API** |
+| Yutori Scout Cards | Powered by **Yutori** |
 
 This ensures every sponsor gets visible attribution at the point of value delivery throughout the application.

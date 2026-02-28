@@ -103,6 +103,8 @@ export async function POST(req: NextRequest) {
                     data: {
                         alignment: {
                             id: alignment.id,
+                            jobId: alignment.jobId,
+                            originalResume: alignment.originalResume,
                             alignedResume: alignment.alignedResume,
                             atsScore: alignment.atsScore,
                             humanScore: alignment.humanScore,
@@ -110,9 +112,9 @@ export async function POST(req: NextRequest) {
                             missingKeywords: alignment.missingKeywords,
                             addedKeywords: alignment.addedKeywords,
                             suggestions: alignment.suggestions,
-                            resumeEntities: alignment.resumeEntities.length,
-                            jdEntities: alignment.jdEntities.length,
-                            alignedEntities: alignment.alignedEntities.length,
+                            resumeEntities: alignment.resumeEntities,
+                            jdEntities: alignment.jdEntities,
+                            alignedEntities: alignment.alignedEntities,
                             modelVersion: alignment.modelVersion,
                         },
                     },

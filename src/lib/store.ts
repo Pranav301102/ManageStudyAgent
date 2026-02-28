@@ -194,7 +194,7 @@ export function addScout(scout: Scout) {
 }
 
 export function addInterview(interview: InterviewSession) {
-  upsertJson("interviews", interview.id, interview);
+  upsertJson("interviews", interview.id, interview, { job_id: interview.jobId });
   const allInterviews = getAllJson<InterviewSession>("interviews");
   cachedHealth.interviewsReady = allInterviews.filter(
     (i) => i.status === "active" || i.status === "preparing"
@@ -202,7 +202,7 @@ export function addInterview(interview: InterviewSession) {
 }
 
 export function addApplication(app: Application) {
-  upsertJson("applications", app.id, app);
+  upsertJson("applications", app.id, app, { job_id: app.jobId });
 }
 
 export function addPerformanceSnapshot(snapshot: PerformanceSnapshot) {

@@ -234,11 +234,32 @@ export interface YutoriScoutResponse {
   id: string;
   query: string;
   display_name: string;
+  status?: string;
   next_run_timestamp: string | null;
+  next_output_timestamp?: string | null;
   user_timezone: string;
   created_at: string;
+  last_update_timestamp?: string | null;
+  update_count?: number;
+  output_interval?: number;
   view_url: string | null;
   webhook_url: string | null;
+}
+
+export interface YutoriScoutUpdate {
+  id: string;
+  timestamp: number;
+  content: string;
+  structured_result?: Record<string, unknown> | Array<Record<string, unknown>> | null;
+  citations?: Array<{ id: string; url: string; preview_data?: Record<string, unknown> }>;
+}
+
+export interface YutoriScoutListResponse {
+  scouts: YutoriScoutResponse[];
+  total: number;
+  filtered_total: number;
+  summary: { active: number; paused: number; done: number };
+  has_more: boolean;
 }
 
 export interface YutoriBrowsingCreate {
@@ -299,6 +320,7 @@ export interface TavilyExtractResult {
 // ─── Live Session Types (Code Editor + Whiteboard) ───────────────────
 
 export type InterviewTab = "voice" | "code" | "whiteboard";
+export type WorkspaceMode = "code" | "whiteboard";
 
 export interface CodeEditorState {
   code: string;

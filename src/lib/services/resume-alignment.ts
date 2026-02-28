@@ -1,18 +1,19 @@
-// ─── Resume Alignment Service — Pioneer + Gemini Auto-ATS Optimizer ──
-// Automatically aligns a user's resume to each discovered job description:
+// ─── Resume Alignment Service — Pioneer-Powered Auto-ATS Optimizer ──
+// Automatically aligns a user's resume to each discovered job description
+// using Pioneer's full model stack (no external LLM dependencies):
 //
 //   1. Pioneer GLiNER-2 extracts entities from BOTH the resume & JD
 //   2. Computes entity overlap → identifies missing keywords/skills
-//   3. Gemini rewrites resume sections to weave in missing JD terms
-//   4. Pioneer re-extracts from the aligned resume → verifies ATS match
-//   5. Scores ATS pass probability + human-readability
+//   3. Pioneer Llama-3.1-8B-Instruct rewrites resume sections naturally
+//   4. Pioneer GLiNER-2 re-extracts from aligned resume → verifies ATS match
+//   5. Pioneer LLM scores ATS pass probability + human-readability
 //   6. Collects (resume, JD, aligned_resume, score) pairs for fine-tuning
-//   7. Periodically fine-tunes a Pioneer model on real-world alignment data
-//      → better ATS-optimized suggestions over time
+//   7. Periodically fine-tunes a Pioneer GLiNER model on alignment data
+//      → better ATS-optimized entity extraction over time
 //
 // The entire flow runs in the background when a new job is discovered.
+// All inference runs through Pioneer API — GLiNER-2 for NER, Llama for generation.
 
-import OpenAI from "openai";
 import { config } from "../config";
 import { ExtractedEntity, Job, UserProfile, ResumeFeedback, AlignedResumeRecord } from "../types";
 import * as pioneerService from "./pioneer-service";
@@ -54,27 +55,69 @@ export interface ATSAnalysis {
     }>;
 }
 
-// ─── Default resume + alignment history (in-memory, persists in server) ─
+// ─── Default resume + alignment history (SQLite-persisted) ──────────
+
+import { getSetting, setSetting, getDb } from "../db";
 
 let defaultResume: string = "";
-const alignmentHistory: AlignedResumeRecord[] = [];
+let alignmentHistory: AlignedResumeRecord[] | null = null; // lazy-loaded
 const feedbackLog: ResumeFeedback[] = [];
 
 export function saveDefaultResume(resume: string): void {
     defaultResume = resume;
+    setSetting("default_resume", resume);
     console.log(`[ResumeAlign] Default resume saved (${resume.length} chars)`);
 }
 
 export function getDefaultResume(): string {
+    if (!defaultResume) {
+        const persisted = getSetting("default_resume");
+        if (persisted) {
+            defaultResume = persisted;
+        }
+    }
     return defaultResume;
 }
 
-export function getAlignmentHistory(): AlignedResumeRecord[] {
+function loadAlignmentHistory(): AlignedResumeRecord[] {
+    if (alignmentHistory !== null) return alignmentHistory;
+    try {
+        const rows = getDb()
+            .prepare("SELECT data FROM resume_alignments ORDER BY created_at DESC")
+            .all() as { data: string }[];
+        alignmentHistory = rows.map((r) => JSON.parse(r.data) as AlignedResumeRecord);
+    } catch {
+        alignmentHistory = [];
+    }
     return alignmentHistory;
 }
 
+function persistAlignment(record: AlignedResumeRecord): void {
+    try {
+        getDb().prepare(
+            "INSERT OR REPLACE INTO resume_alignments (id, job_id, data) VALUES (?, ?, ?)"
+        ).run(record.alignment.id, record.alignment.jobId, JSON.stringify(record));
+    } catch (err) {
+        console.warn("[ResumeAlign] Failed to persist alignment:", err);
+    }
+}
+
+function persistAlignmentUpdate(record: AlignedResumeRecord): void {
+    try {
+        getDb().prepare(
+            "UPDATE resume_alignments SET data = ? WHERE id = ?"
+        ).run(JSON.stringify(record), record.alignment.id);
+    } catch (err) {
+        console.warn("[ResumeAlign] Failed to update alignment:", err);
+    }
+}
+
+export function getAlignmentHistory(): AlignedResumeRecord[] {
+    return loadAlignmentHistory();
+}
+
 export function getAlignmentById(id: string): AlignedResumeRecord | undefined {
-    return alignmentHistory.find((r) => r.alignment.id === id);
+    return loadAlignmentHistory().find((r) => r.alignment.id === id);
 }
 
 /**
@@ -88,11 +131,13 @@ export function submitFeedback(feedback: ResumeFeedback): {
 } {
     feedbackLog.push(feedback);
 
-    const record = alignmentHistory.find(
+    const history = loadAlignmentHistory();
+    const record = history.find(
         (r) => r.alignment.id === feedback.alignmentId
     );
     if (record) {
         record.feedback = feedback;
+        persistAlignmentUpdate(record);
     }
 
     // Use feedback to enrich training data:
@@ -103,7 +148,7 @@ export function submitFeedback(feedback: ResumeFeedback): {
         const goldResume = feedback.preferredVersion || record.alignment.alignedResume;
         const isPositive = feedback.rating === "good";
 
-        trainingDataCollector.push({
+        const sample: AlignmentTrainingSample = {
             resume: record.alignment.originalResume,
             jobDescription: record.alignment.jobDescription,
             alignedResume: goldResume,
@@ -114,15 +159,18 @@ export function submitFeedback(feedback: ResumeFeedback): {
             ],
             timestamp: feedback.timestamp,
             feedbackRating: feedback.rating,
-        });
+        };
+        const samples = loadTrainingData();
+        samples.push(sample);
+        persistTrainingSample(sample);
 
         console.log(
             `[ResumeAlign] Feedback received: ${feedback.rating} for ${feedback.alignmentId}` +
-            ` | Training samples: ${trainingDataCollector.length}/${FINE_TUNE_THRESHOLD}`
+            ` | Training samples: ${samples.length}/${FINE_TUNE_THRESHOLD}`
         );
 
         // Auto-trigger fine-tuning when threshold is reached
-        if (trainingDataCollector.length >= FINE_TUNE_THRESHOLD) {
+        if (samples.length >= FINE_TUNE_THRESHOLD) {
             triggerAutoFineTune().catch((err) =>
                 console.error("[ResumeAlign] Auto fine-tune failed:", err)
             );
@@ -131,7 +179,7 @@ export function submitFeedback(feedback: ResumeFeedback): {
 
     return {
         accepted: true,
-        trainingSamplesCollected: trainingDataCollector.length,
+        trainingSamplesCollected: loadTrainingData().length,
     };
 }
 
@@ -163,23 +211,43 @@ interface AlignmentTrainingSample {
     feedbackRating?: string;  // user feedback enriches training signal
 }
 
-// In-memory collector — persists within server lifetime
-const trainingDataCollector: AlignmentTrainingSample[] = [];
+// SQLite-backed collector — persists across restarts
+let trainingDataCollector: AlignmentTrainingSample[] | null = null; // lazy-loaded
 const FINE_TUNE_THRESHOLD = 50; // collect N samples before auto-fine-tuning
 
-// ─── Gemini Client ──────────────────────────────────────────────────
-
-let geminiClient: OpenAI | null = null;
-
-function getGemini(): OpenAI {
-    if (!geminiClient) {
-        geminiClient = new OpenAI({
-            apiKey: config.gemini.apiKey,
-            baseURL: config.gemini.baseUrl,
-        });
+function loadTrainingData(): AlignmentTrainingSample[] {
+    if (trainingDataCollector !== null) return trainingDataCollector;
+    try {
+        const rows = getDb()
+            .prepare("SELECT data FROM training_samples ORDER BY created_at ASC")
+            .all() as { data: string }[];
+        trainingDataCollector = rows.map((r) => JSON.parse(r.data) as AlignmentTrainingSample);
+        console.log(`[ResumeAlign] Loaded ${trainingDataCollector.length} training samples from DB`);
+    } catch {
+        trainingDataCollector = [];
     }
-    return geminiClient;
+    return trainingDataCollector;
 }
+
+function persistTrainingSample(sample: AlignmentTrainingSample): void {
+    try {
+        getDb().prepare(
+            "INSERT INTO training_samples (data, feedback_rating) VALUES (?, ?)"
+        ).run(JSON.stringify(sample), sample.feedbackRating || null);
+    } catch (err) {
+        console.warn("[ResumeAlign] Failed to persist training sample:", err);
+    }
+}
+
+function clearPersistedTrainingData(): void {
+    try {
+        getDb().prepare("DELETE FROM training_samples").run();
+    } catch (err) {
+        console.warn("[ResumeAlign] Failed to clear training samples:", err);
+    }
+}
+
+// (Pioneer LLM is accessed via pioneerService.generate() — no separate client needed)
 
 // ─── Step 1: Analyze Resume-JD Match ────────────────────────────────
 
@@ -252,7 +320,7 @@ export async function analyzeResumeMatch(
 
     // Compute scores
     const atsScore = Math.round(entityOverlap * 85 + 15); // base 15, max 100
-    const humanScore = 80; // placeholder — later: Gemini evaluates readability
+    const humanScore = 80; // placeholder — overridden by Pioneer LLM scoring below
     const overallScore = Math.round(atsScore * 0.6 + humanScore * 0.4);
 
     // Generate suggestions
@@ -288,7 +356,7 @@ export async function analyzeResumeMatch(
 // ─── Step 2: Auto-Align Resume ──────────────────────────────────────
 
 /**
- * Use Gemini to rewrite the resume, weaving in missing JD keywords
+ * Use Pioneer LLM to rewrite the resume, weaving in missing JD keywords
  * while maintaining natural language and truthfulness.
  * Then re-verify with Pioneer to confirm ATS alignment improved.
  */
@@ -308,8 +376,8 @@ export async function alignResume(
         extractJDEntities(jobDescription),
     ]);
 
-    // Step 3: Use Gemini to rewrite resume sections
-    const alignedResume = await rewriteWithGemini(
+    // Step 3: Use Pioneer LLM to rewrite resume sections
+    const alignedResume = await rewriteWithPioneer(
         resume,
         jobDescription,
         job,
@@ -317,13 +385,13 @@ export async function alignResume(
         jdEntities
     );
 
-    // Step 4: Re-extract entities from aligned resume using Pioneer
+    // Step 4: Re-extract entities from aligned resume using Pioneer GLiNER-2
     const alignedEntities = await extractResumeEntities(alignedResume);
 
     // Step 5: Compute new ATS score
     const postAnalysis = await analyzeResumeMatch(alignedResume, jobDescription);
 
-    // Step 6: Score human readability via Gemini
+    // Step 6: Score human readability via Pioneer LLM
     const humanScore = await scoreHumanReadability(alignedResume);
 
     const overallScore = Math.round(postAnalysis.atsScore * 0.6 + humanScore * 0.4);
@@ -357,12 +425,14 @@ export async function alignResume(
     // Step 7: Collect training data for Pioneer fine-tuning
     collectTrainingData(alignment);
 
-    // Step 8: Store in alignment history
-    alignmentHistory.push({
+    // Step 8: Store in alignment history (memory + SQLite)
+    const record: AlignedResumeRecord = {
         alignment,
         jobTitle: job.title,
         company: job.company,
-    });
+    };
+    loadAlignmentHistory().unshift(record);
+    persistAlignment(record);
 
     return alignment;
 }
@@ -420,13 +490,14 @@ async function extractJDEntities(jd: string): Promise<ExtractedEntity[]> {
     }
 }
 
-// ─── Gemini Rewrite ─────────────────────────────────────────────────
+// ─── Pioneer LLM Rewrite ────────────────────────────────────────────
 
 /**
- * Use Gemini to intelligently rewrite resume sections,
- * incorporating missing JD keywords naturally.
+ * Use Pioneer's Llama-3.1-8B-Instruct to intelligently rewrite resume
+ * sections, incorporating missing JD keywords naturally.
+ * Combined with GLiNER-2 entity verification for robust ATS optimization.
  */
-async function rewriteWithGemini(
+async function rewriteWithPioneer(
     resume: string,
     jobDescription: string,
     job: Job,
@@ -438,12 +509,7 @@ async function rewriteWithGemini(
     }
 
     try {
-        const response = await getGemini().chat.completions.create({
-            model: config.gemini.model,
-            messages: [
-                {
-                    role: "system",
-                    content: `You are an expert ATS resume optimizer. Your task is to rewrite a resume to better align with a specific job description while maintaining truthfulness and natural language.
+        const systemPrompt = `You are an expert ATS resume optimizer. Rewrite the resume to better align with the job description while maintaining truthfulness.
 
 RULES:
 1. NEVER fabricate experience or skills the candidate doesn't have
@@ -455,17 +521,15 @@ RULES:
 7. Use action verbs and quantifiable achievements
 8. Ensure ATS-friendly formatting (no tables, graphics, special characters)
 
-Return the complete rewritten resume text. Do NOT include any explanation or commentary.`,
-                },
-                {
-                    role: "user",
-                    content: `ORIGINAL RESUME:
+Return ONLY the complete rewritten resume text. No explanation or commentary.`;
+
+        const userPrompt = `ORIGINAL RESUME:
 ${resume}
 
 TARGET JOB: ${job.title} at ${job.company}
 
 JOB DESCRIPTION:
-${jobDescription.slice(0, 2000)}
+${jobDescription.slice(0, 1500)}
 
 MISSING KEYWORDS TO INCORPORATE (if truthful):
 ${missingKeywords.slice(0, 15).join(", ")}
@@ -473,48 +537,109 @@ ${missingKeywords.slice(0, 15).join(", ")}
 KEY JD ENTITIES BY CATEGORY:
 ${jdEntities
     .slice(0, 20)
-    .map((e) => `- ${e.label}: ${e.text} (confidence: ${e.score.toFixed(2)})`)
+    .map((e) => `- ${e.label}: ${e.text}`)
     .join("\n")}
 
-Rewrite the resume to maximize ATS keyword match while keeping it truthful and readable.`,
-                },
-            ],
-            temperature: 0.4,
-            max_tokens: 3000,
-        });
+Rewrite the resume to maximize ATS keyword match while keeping it truthful and readable.`;
 
-        const content = response.choices[0]?.message?.content;
-        return content?.trim() || resume;
+        const completion = await pioneerService.generate(
+            [
+                { role: "system", content: systemPrompt },
+                { role: "user", content: userPrompt },
+            ],
+            { maxTokens: 3000 }
+        );
+
+        const result = completion.trim();
+        if (result.length < 100) {
+            console.warn("[ResumeAlign] Pioneer LLM returned short response, keeping original");
+            return resume;
+        }
+
+        // Verify with GLiNER-2: does the rewrite actually contain more JD entities?
+        const postEntities = await pioneerService.inference(
+            result,
+            ["programming_language", "framework", "tool", "methodology", "cloud_service"],
+            { threshold: 0.35 }
+        ).catch(() => []);
+
+        const preEntities = await pioneerService.inference(
+            resume,
+            ["programming_language", "framework", "tool", "methodology", "cloud_service"],
+            { threshold: 0.35 }
+        ).catch(() => []);
+
+        if (postEntities.length < preEntities.length * 0.5) {
+            console.warn(
+                `[ResumeAlign] Rewrite lost entities (${preEntities.length}→${postEntities.length}), keeping original`
+            );
+            return resume;
+        }
+
+        console.log(
+            `[ResumeAlign] Pioneer LLM rewrite: ${preEntities.length}→${postEntities.length} entities`
+        );
+        return result;
     } catch (err) {
-        console.error("[ResumeAlign] Gemini rewrite failed:", err);
+        console.error("[ResumeAlign] Pioneer LLM rewrite failed:", err);
         return resume; // Return original on failure
     }
 }
 
 /**
- * Score the human readability of a resume using Gemini.
+ * Score the human readability of a resume using Pioneer's LLM.
+ * GLiNER-2 cross-validates by checking entity density (over-stuffed = low readability).
  */
 async function scoreHumanReadability(resume: string): Promise<number> {
     try {
-        const response = await getGemini().chat.completions.create({
-            model: config.gemini.model,
-            messages: [
-                {
-                    role: "system",
-                    content: `Score this resume's readability for a human recruiter on a scale of 0-100.
+        // Dual scoring: LLM qualitative + GLiNER-2 entity-density heuristic
+        const [llmScore, entities] = await Promise.all([
+            // LLM readability assessment
+            pioneerService.generate(
+                [
+                    {
+                        role: "system",
+                        content: `Score this resume's readability for a human recruiter on a scale of 0-100.
 Consider: clarity, professional tone, logical flow, concrete achievements, brevity.
-Return ONLY a JSON object: {"score": number, "reason": "brief explanation"}`,
-                },
-                { role: "user", content: resume.slice(0, 2000) },
-            ],
-            temperature: 0.2,
-            max_tokens: 100,
-        });
+Return ONLY a JSON object: {"score": <number>, "reason": "<brief explanation>"}`,
+                    },
+                    { role: "user", content: resume.slice(0, 1500) },
+                ],
+                { maxTokens: 150 }
+            ).catch(() => '{"score":75}'),
+            // Entity density check — over-stuffed resumes score lower
+            pioneerService.inference(
+                resume.slice(0, 1500),
+                ["programming_language", "framework", "tool", "methodology"],
+                { threshold: 0.3 }
+            ).catch(() => []),
+        ]);
 
-        const content = response.choices[0]?.message?.content || '{"score":75}';
-        const clean = content.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
-        const parsed = JSON.parse(clean);
-        return Math.min(100, Math.max(0, parsed.score || 75));
+        // Parse LLM score
+        const clean = llmScore.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+        // Try to extract JSON from response, handle cases where LLM adds extra text
+        const jsonMatch = clean.match(/\{[^}]*"score"\s*:\s*(\d+)[^}]*\}/);
+        let score = 75;
+        if (jsonMatch) {
+            try {
+                const parsed = JSON.parse(jsonMatch[0]);
+                score = parsed.score || 75;
+            } catch {
+                score = parseInt(jsonMatch[1]) || 75;
+            }
+        }
+
+        // Entity density penalty: if >40 entities per 1000 chars, resume is keyword-stuffed
+        const wordCount = resume.split(/\s+/).length;
+        const entityDensity = entities.length / Math.max(1, wordCount / 100);
+        const densityPenalty = entityDensity > 8 ? Math.min(15, (entityDensity - 8) * 3) : 0;
+
+        const finalScore = Math.min(100, Math.max(0, Math.round(score - densityPenalty)));
+        console.log(
+            `[ResumeAlign] Readability: LLM=${score}, entities=${entities.length}, ` +
+            `density=${entityDensity.toFixed(1)}, penalty=${densityPenalty.toFixed(0)}, final=${finalScore}`
+        );
+        return finalScore;
     } catch {
         return 75; // Default score on failure
     }
@@ -528,21 +653,24 @@ Return ONLY a JSON object: {"score": number, "reason": "brief explanation"}`,
  * fine-tuning job to improve future ATS entity extraction.
  */
 function collectTrainingData(alignment: ResumeAlignment): void {
-    trainingDataCollector.push({
+    const sample: AlignmentTrainingSample = {
         resume: alignment.originalResume,
         jobDescription: alignment.jobDescription,
         alignedResume: alignment.alignedResume,
         atsScore: alignment.atsScore,
         entities: [...alignment.resumeEntities, ...alignment.jdEntities],
         timestamp: alignment.createdAt,
-    });
+    };
+    const samples = loadTrainingData();
+    samples.push(sample);
+    persistTrainingSample(sample);
 
     console.log(
-        `[ResumeAlign] Training data: ${trainingDataCollector.length}/${FINE_TUNE_THRESHOLD} samples collected`
+        `[ResumeAlign] Training data: ${samples.length}/${FINE_TUNE_THRESHOLD} samples collected`
     );
 
     // Auto-trigger fine-tuning when threshold is reached
-    if (trainingDataCollector.length >= FINE_TUNE_THRESHOLD) {
+    if (samples.length >= FINE_TUNE_THRESHOLD) {
         triggerAutoFineTune().catch((err) =>
             console.error("[ResumeAlign] Auto fine-tune failed:", err)
         );
@@ -559,15 +687,16 @@ function collectTrainingData(alignment: ResumeAlignment): void {
  *   User data → Training → Better extraction → Better alignment → More data
  */
 async function triggerAutoFineTune(): Promise<void> {
-    if (trainingDataCollector.length < FINE_TUNE_THRESHOLD) return;
+    const samples = loadTrainingData();
+    if (samples.length < FINE_TUNE_THRESHOLD) return;
 
     console.log(
-        `[ResumeAlign] Auto fine-tuning Pioneer model with ${trainingDataCollector.length} samples`
+        `[ResumeAlign] Auto fine-tuning Pioneer model with ${samples.length} samples`
     );
 
     // Build training samples from alignment data
     // Each sample: the aligned resume text + the entities Pioneer should extract
-    const trainingData = trainingDataCollector.map((sample) => ({
+    const trainingData = samples.map((sample) => ({
         text: sample.alignedResume,
         entities: sample.entities.filter((e) => e.score >= 0.5),
     }));
@@ -585,8 +714,10 @@ async function triggerAutoFineTune(): Promise<void> {
             `(status: ${result.status})`
         );
 
-        // Clear collected data after successful upload
-        trainingDataCollector.length = 0;
+        // Clear collected data after successful upload (memory + DB)
+        samples.length = 0;
+        trainingDataCollector = [];
+        clearPersistedTrainingData();
     } catch (err) {
         console.error("[ResumeAlign] Fine-tuning pipeline failed:", err);
     }
@@ -600,10 +731,11 @@ export function getTrainingStatus(): {
     threshold: number;
     readyForFineTune: boolean;
 } {
+    const samples = loadTrainingData();
     return {
-        samplesCollected: trainingDataCollector.length,
+        samplesCollected: samples.length,
         threshold: FINE_TUNE_THRESHOLD,
-        readyForFineTune: trainingDataCollector.length >= FINE_TUNE_THRESHOLD,
+        readyForFineTune: samples.length >= FINE_TUNE_THRESHOLD,
     };
 }
 
@@ -615,14 +747,15 @@ export async function manualFineTune(): Promise<{
     message: string;
     jobId?: string;
 }> {
-    if (trainingDataCollector.length < 10) {
+    const samples = loadTrainingData();
+    if (samples.length < 10) {
         return {
             success: false,
-            message: `Need at least 10 samples (have ${trainingDataCollector.length})`,
+            message: `Need at least 10 samples (have ${samples.length})`,
         };
     }
 
-    const trainingData = trainingDataCollector.map((sample) => ({
+    const trainingData = samples.map((sample) => ({
         text: sample.alignedResume,
         entities: sample.entities.filter((e) => e.score >= 0.5),
     }));
@@ -635,7 +768,9 @@ export async function manualFineTune(): Promise<{
             epochs: 5,
         });
 
-        trainingDataCollector.length = 0;
+        // Clear collected data after successful upload (memory + DB)
+        trainingDataCollector = [];
+        clearPersistedTrainingData();
         return {
             success: true,
             message: result.message,

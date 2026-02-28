@@ -6,6 +6,8 @@ import { config } from "../config";
 import {
   YutoriScoutCreate,
   YutoriScoutResponse,
+  YutoriScoutUpdate,
+  YutoriScoutListResponse,
   YutoriBrowsingCreate,
   YutoriBrowsingResponse,
 } from "../types";
@@ -147,6 +149,113 @@ export async function resumeScout(scoutId: string): Promise<void> {
 export async function deleteScout(scoutId: string): Promise<void> {
   await yutoriRequest("DELETE", `/scouting/tasks/${scoutId}`);
   console.log(`[Yutori] Scout ${scoutId} deleted`);
+}
+
+// ─── Scouting Updates — Pull-based result retrieval ──────────────────
+// Alternative to webhooks when the app runs on localhost.
+// Polls Yutori for accumulated scout results via GET /updates.
+
+/**
+ * List all scouts on the Yutori account.
+ */
+export async function listScouts(
+  status?: "active" | "paused" | "done"
+): Promise<YutoriScoutListResponse> {
+  const params = status ? `?status=${status}` : "";
+  const response = await yutoriRequest("GET", `/scouting/tasks${params}`);
+  return response as YutoriScoutListResponse;
+}
+
+/**
+ * Get updates (results) for a specific scout.
+ * Each update contains a `structured_result` array of discovered jobs.
+ * Returns updates newest first.
+ */
+export async function getScoutUpdates(
+  scoutId: string,
+  pageSize: number = 20
+): Promise<{ updates: YutoriScoutUpdate[]; next_cursor: string | null }> {
+  const response = await yutoriRequest(
+    "GET",
+    `/scouting/tasks/${scoutId}/updates?page_size=${pageSize}`
+  );
+  return response as { updates: YutoriScoutUpdate[]; next_cursor: string | null };
+}
+
+/**
+ * Pull all new jobs from all active Yutori scouts.
+ * Deduplicates by update ID to avoid reprocessing.
+ * Returns an array of raw job objects ready for processJobDiscovery().
+ */
+export async function pullAllScoutResults(
+  processedUpdateIds: Set<string>
+): Promise<{
+  jobs: Array<{
+    job_title?: string;
+    company?: string;
+    location?: string;
+    url?: string;
+    posted_date?: string;
+    brief_description?: string;
+    _scoutId?: string;
+    _updateId?: string;
+  }>;
+  newUpdateIds: string[];
+}> {
+  const allJobs: Array<{
+    job_title?: string;
+    company?: string;
+    location?: string;
+    url?: string;
+    posted_date?: string;
+    brief_description?: string;
+    _scoutId?: string;
+    _updateId?: string;
+  }> = [];
+  const newUpdateIds: string[] = [];
+
+  try {
+    const { scouts } = await listScouts("active");
+    console.log(`[Yutori] Pulling results from ${scouts.length} active scouts...`);
+
+    for (const scout of scouts) {
+      try {
+        const { updates } = await getScoutUpdates(scout.id, 10);
+
+        for (const update of updates) {
+          // Skip already-processed updates
+          if (processedUpdateIds.has(update.id)) continue;
+
+          const jobs = Array.isArray(update.structured_result)
+            ? update.structured_result
+            : [];
+
+          for (const job of jobs) {
+            allJobs.push({
+              ...job as Record<string, string>,
+              _scoutId: scout.id,
+              _updateId: update.id,
+            });
+          }
+
+          newUpdateIds.push(update.id);
+          console.log(
+            `[Yutori] Scout ${scout.id.slice(0, 8)}: update ${update.id.slice(0, 8)} → ${jobs.length} jobs`
+          );
+        }
+      } catch (err) {
+        console.warn(`[Yutori] Failed to pull updates for scout ${scout.id}:`, err);
+      }
+    }
+
+    console.log(
+      `[Yutori] Pull complete: ${allJobs.length} total jobs from ${newUpdateIds.length} new updates`
+    );
+  } catch (err) {
+    console.error("[Yutori] Failed to list scouts:", err);
+  }
+
+  return { jobs: allJobs, newUpdateIds };
 }
 
 // ─── Browsing API — Full JD Extraction ───────────────────────────────

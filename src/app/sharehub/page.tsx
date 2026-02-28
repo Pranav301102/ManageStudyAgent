@@ -27,7 +27,13 @@ import {
   AlertTriangle,
   Database,
   RefreshCw,
+  Radio,
+  Plus,
+  ExternalLink,
+  Satellite,
+  Activity,
 } from "lucide-react";
+import { Scout } from "@/lib/types";
 
 // ─── Types ───────────────────────────────────────────────────────────
 
@@ -96,32 +102,39 @@ export default function JobScoutPage() {
     skillGapsIdentified: 0,
   });
   const [library, setLibrary] = useState<LibraryData | null>(null);
+  const [liveScouts, setLiveScouts] = useState<Scout[]>([]);
   const [jobs, setJobs] = useState<Job[]>([]);
   const [lifecycleEvents, setLifecycleEvents] = useState<LifecycleEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [seeding, setSeeding] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [polling, setPolling] = useState(false);
+  const [creatingScouts, setCreatingScouts] = useState(false);
   const [importResult, setImportResult] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"graph" | "scouts" | "jobs" | "timeline">("graph");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const fetchData = useCallback(async () => {
     try {
-      const [healthRes, libraryRes, jobsRes] = await Promise.all([
+      const [healthRes, libraryRes, jobsRes, scoutsRes] = await Promise.all([
         fetch("/api/system"),
         fetch("/api/library"),
         fetch("/api/jobs"),
+        fetch("/api/scouts"),
       ]);
-      const [healthData, libraryData, jobsData] = await Promise.all([
+      const [healthData, libraryData, jobsData, scoutsData] = await Promise.all([
         healthRes.json(),
         libraryRes.json(),
         jobsRes.json(),
+        scoutsRes.json(),
       ]);
 
       if (healthData.success) setHealth(healthData.data);
       if (libraryData.success) setLibrary(libraryData.data);
       if (jobsData.success) setJobs(jobsData.data);
+      if (scoutsData.success) setLiveScouts(scoutsData.data);
 
       // Load lifecycle events
       try {
@@ -215,9 +228,62 @@ export default function JobScoutPage() {
     }
   };
 
+  // ─── Yutori Operations ───────────────────────────────────────────
+  const handleSyncAndPoll = async () => {
+    setSyncing(true);
+    setPolling(true);
+    try {
+      const res = await fetch("/api/orchestrator", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "sync-and-poll" }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        const syncMsg = `Synced ${data.data.sync.created} scouts`;
+        const pollMsg = `ingested ${data.data.poll.newJobs} new jobs`;
+        setImportResult(`${syncMsg}, ${pollMsg}`);
+        await fetchData();
+      }
+    } catch (err) {
+      console.error("Sync-and-poll failed:", err);
+      setImportResult("Sync failed — check console.");
+    } finally {
+      setSyncing(false);
+      setPolling(false);
+    }
+  };
+
+  const handleCreateDiverseScouts = async () => {
+    setCreatingScouts(true);
+    try {
+      const res = await fetch("/api/scouts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "create-diverse" }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setImportResult(`Created ${data.data.scouts.length} diverse scouts on Yutori`);
+        await fetchData();
+      }
+    } catch (err) {
+      console.error("Create diverse scouts failed:", err);
+      setImportResult("Scout creation failed.");
+    } finally {
+      setCreatingScouts(false);
+    }
+  };
+
+  // Use live scouts from /api/scouts (Yutori-linked) as primary, memory library as secondary
+  const activeYutoriScouts = liveScouts.filter((s) => s.status === "active");
+  const pausedYutoriScouts = liveScouts.filter((s) => s.status === "paused");
+  const totalYutoriJobs = liveScouts.reduce((sum, s) => sum + (s.jobsFound || 0), 0);
+  const yutoriLinkedCount = liveScouts.filter((s) => s.yutoriScoutId).length;
+
   const activeScouts = library?.scouts.filter((s) => s.status === "active") || [];
   const retiredScouts = library?.scouts.filter((s) => s.status === "retired") || [];
-  const hasData = (library?.scouts.length ?? 0) > 0 || jobs.length > 0;
+  const hasData = liveScouts.length > 0 || (library?.scouts.length ?? 0) > 0 || jobs.length > 0;
 
   if (loading) {
     return (
@@ -240,20 +306,33 @@ export default function JobScoutPage() {
             <h2 className="text-lg font-bold text-white flex items-center gap-2">
               <Radar className="w-5 h-5 text-indigo-400" />
               Job Scout
+              {yutoriLinkedCount > 0 && (
+                <span className="text-[10px] px-2 py-0.5 bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 rounded-full flex items-center gap-1">
+                  <Satellite className="w-3 h-3" /> {yutoriLinkedCount} Yutori-linked
+                </span>
+              )}
             </h2>
             <p className="text-xs text-slate-400 mt-1">
-              Self-replicating autonomous scout network &middot; Visual pipeline &middot; Live job discovery
+              Autonomous scout network powered by Yutori &middot; Live polling &middot; {jobs.length} jobs discovered
             </p>
           </div>
 
           <div className="flex items-center gap-2">
             <button
-              onClick={handleSeed}
-              disabled={seeding}
-              className="flex items-center gap-2 px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-medium transition-all disabled:opacity-50 shadow-lg shadow-emerald-600/20"
+              onClick={handleSyncAndPoll}
+              disabled={syncing || polling}
+              className="flex items-center gap-2 px-3 py-2 bg-cyan-600 hover:bg-cyan-700 text-white rounded-lg text-sm font-medium transition-all disabled:opacity-50 shadow-lg shadow-cyan-600/20"
             >
-              {seeding ? <Loader2 className="w-4 h-4 animate-spin" /> : <Database className="w-4 h-4" />}
-              {seeding ? "Seeding..." : "Seed Data"}
+              {syncing || polling ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+              {syncing ? "Syncing..." : polling ? "Polling..." : "Sync & Poll"}
+            </button>
+            <button
+              onClick={handleCreateDiverseScouts}
+              disabled={creatingScouts}
+              className="flex items-center gap-2 px-3 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-medium transition-all disabled:opacity-50 shadow-lg shadow-purple-600/20"
+            >
+              {creatingScouts ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+              {creatingScouts ? "Creating..." : "Deploy Scouts"}
             </button>
             <button
               onClick={handleAutoGenerate}
@@ -281,12 +360,51 @@ export default function JobScoutPage() {
           </div>
         )}
 
+        {/* Yutori Live Scouts Panel */}
+        {activeYutoriScouts.length > 0 && (
+          <div className="bg-gradient-to-r from-cyan-950/40 to-slate-900 rounded-xl border border-cyan-500/20 p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <Satellite className="w-4 h-4 text-cyan-400" />
+              <h3 className="text-sm font-semibold text-white">Live Yutori Scouts</h3>
+              <span className="text-[10px] px-2 py-0.5 bg-cyan-500/10 text-cyan-400 rounded-full">Polling every 30min</span>
+              <span className="ml-auto text-[10px] text-slate-500">{pausedYutoriScouts.length} paused</span>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+              {activeYutoriScouts.map((scout) => (
+                <div key={scout.id} className="bg-slate-800/60 rounded-lg p-3 border border-slate-700/50 hover:border-cyan-500/30 transition-colors">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5 mb-1">
+                        <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse" />
+                        <p className="text-xs font-medium text-white truncate">{scout.query.slice(0, 55)}...</p>
+                      </div>
+                      <div className="flex items-center gap-2 text-[10px] text-slate-500">
+                        {scout.yutoriScoutId && (
+                          <span className="flex items-center gap-0.5 text-cyan-400/70" title={scout.yutoriScoutId}>
+                            <Radio className="w-2.5 h-2.5" /> {scout.yutoriScoutId.slice(0, 8)}
+                          </span>
+                        )}
+                        <span>{scout.interval / 60}m interval</span>
+                      </div>
+                    </div>
+                    <div className="flex-shrink-0 text-right">
+                      <span className="text-sm font-bold text-white">{scout.jobsFound}</span>
+                      <span className="text-[10px] text-slate-500 ml-0.5">jobs</span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Stats Row */}
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-          <StatCard icon={<Zap className="w-4 h-4 text-indigo-400" />} label="Active Scouts" value={activeScouts.length} />
-          <StatCard icon={<Globe className="w-4 h-4 text-cyan-400" />} label="Sources" value={library?.discoveredSources.length || 0} />
-          <StatCard icon={<Briefcase className="w-4 h-4 text-emerald-400" />} label="Jobs Found" value={library?.insights.totalJobsDiscovered || jobs.length} />
-          <StatCard icon={<TrendingUp className="w-4 h-4 text-amber-400" />} label="Avg Match" value={`${((library?.insights.avgRelevanceScore || 0) * 100).toFixed(0)}%`} />
+        <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
+          <StatCard icon={<Satellite className="w-4 h-4 text-cyan-400" />} label="Yutori Scouts" value={yutoriLinkedCount} />
+          <StatCard icon={<Activity className="w-4 h-4 text-emerald-400" />} label="Active" value={activeYutoriScouts.length} />
+          <StatCard icon={<Briefcase className="w-4 h-4 text-indigo-400" />} label="Jobs Found" value={jobs.length} />
+          <StatCard icon={<Zap className="w-4 h-4 text-amber-400" />} label="Scout Jobs" value={totalYutoriJobs} />
+          <StatCard icon={<TrendingUp className="w-4 h-4 text-purple-400" />} label="Avg Match" value={jobs.length > 0 ? `${Math.round(jobs.reduce((s, j) => s + j.matchScore, 0) / jobs.length)}%` : "—"} />
           <StatCard icon={<GitBranch className="w-4 h-4 text-purple-400" />} label="Self-Replicated" value={lifecycleEvents.filter(e => e.type === "replicated").length} />
         </div>
 
@@ -314,19 +432,15 @@ export default function JobScoutPage() {
         {/* No Data State */}
         {!hasData && (
           <div className="bg-slate-800 rounded-xl border border-slate-700 p-12 text-center">
-            <Database className="w-12 h-12 text-slate-700 mx-auto mb-4" />
+            <Satellite className="w-12 h-12 text-slate-700 mx-auto mb-4" />
             <h3 className="text-lg font-semibold text-white mb-2">No Scout Data Yet</h3>
             <p className="text-sm text-slate-400 mb-6 max-w-md mx-auto">
-              Click &quot;Seed Data&quot; to populate with realistic demo data showing the self-replicating scout system in action,
-              or &quot;AI Generate&quot; to create live scouts from your profile.
+              Click &quot;Sync & Poll&quot; to pull results from your Yutori scouts,
+              or &quot;Deploy Scouts&quot; to create 5 diverse scouts on Yutori.
             </p>
             <div className="flex items-center justify-center gap-3">
-              <button onClick={handleSeed} disabled={seeding} className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-medium transition-colors">
-                {seeding ? "Seeding..." : "Seed Demo Data"}
-              </button>
-              <button onClick={handleAutoGenerate} disabled={generating} className="px-6 py-2.5 bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg text-sm font-medium transition-colors">
-                {generating ? "Generating..." : "AI Generate Scouts"}
-              </button>
+              <button onClick={handleSyncAndPoll} disabled={syncing} className="px-6 py-2.5 bg-cyan-600 hover:bg-cyan-700 text-white rounded-lg text-sm font-medium transition-colors">\n                {syncing ? "Syncing..." : "Sync & Poll Yutori"}\n              </button>
+              <button onClick={handleCreateDiverseScouts} disabled={creatingScouts} className="px-6 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-medium transition-colors">\n                {creatingScouts ? "Creating..." : "Deploy 5 Diverse Scouts"}\n              </button>
             </div>
           </div>
         )}

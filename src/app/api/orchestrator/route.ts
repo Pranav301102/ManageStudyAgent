@@ -1,4 +1,4 @@
-// ─── Orchestrator API — Start/Stop autonomous pipeline ───────────────
+// ─── Orchestrator API — Start/Stop/Poll autonomous pipeline ──────────
 import { NextRequest, NextResponse } from "next/server";
 import * as orchestrator from "@/lib/services/orchestrator";
 import { store, updateSystemHealth } from "@/lib/store";
@@ -23,6 +23,68 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({
         success: true,
         message: "Orchestrator stopped",
+      });
+    }
+
+    // Sync local DB scouts with live Yutori scouts
+    if (action === "sync") {
+      const result = await orchestrator.syncScoutsWithYutori();
+      return NextResponse.json({
+        success: true,
+        message: `Synced: ${result.synced} linked, ${result.created} created, ${result.orphansRemoved} orphans removed`,
+        data: result,
+      });
+    }
+
+    // Poll Yutori scouts for new results (lightweight ingest only)
+    if (action === "poll") {
+      const result = await orchestrator.pollAllScouts();
+      return NextResponse.json({
+        success: true,
+        message: `Polled: ${result.newUpdates} new updates, ${result.newJobs} jobs ingested`,
+        data: {
+          newUpdates: result.newUpdates,
+          newJobs: result.newJobs,
+          jobs: result.ingestedJobs.map((j) => ({
+            id: j.id,
+            title: j.title,
+            company: j.company,
+            status: j.status,
+          })),
+        },
+      });
+    }
+
+    // Enrich discovered jobs through the heavy pipeline (browsing, NER, gaps)
+    if (action === "enrich") {
+      const limit = body.limit || 5;
+      const result = await orchestrator.enrichDiscoveredJobs(limit);
+      return NextResponse.json({
+        success: true,
+        message: `Enriched ${result.enriched} jobs (${result.errors} errors)`,
+        data: result,
+      });
+    }
+
+    // Sync + Poll in one shot (most useful action)
+    if (action === "sync-and-poll") {
+      const syncResult = await orchestrator.syncScoutsWithYutori();
+      const pollResult = await orchestrator.pollAllScouts();
+      return NextResponse.json({
+        success: true,
+        message: `Synced ${syncResult.created} scouts, ingested ${pollResult.newJobs} new jobs`,
+        data: {
+          sync: syncResult,
+          poll: {
+            newUpdates: pollResult.newUpdates,
+            newJobs: pollResult.newJobs,
+            jobs: pollResult.ingestedJobs.map((j) => ({
+              id: j.id,
+              title: j.title,
+              company: j.company,
+            })),
+          },
+        },
       });
     }
 

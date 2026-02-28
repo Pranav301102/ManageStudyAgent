@@ -28,7 +28,6 @@ import {
   ThumbsDown,
   MessageSquare,
   Save,
-  History,
   Star,
 } from "lucide-react";
 
@@ -101,7 +100,7 @@ function ResumePageContent() {
   const [bulkAligning, setBulkAligning] = useState(false);
   const [copied, setCopied] = useState(false);
   const [activeTab, setActiveTab] = useState<
-    "editor" | "analysis" | "aligned" | "training" | "history"
+    "editor" | "analysis" | "aligned" | "training"
   >("editor");
   const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
   const [savingDefault, setSavingDefault] = useState(false);
@@ -265,7 +264,7 @@ function ResumePageContent() {
         }),
       });
       const data = await res.json();
-      if (data.success) setAnalysis(data.data);
+      if (data.success) setAnalysis(data.data.analysis ?? data.data);
     } catch (err) {
       console.error("Analysis failed:", err);
     } finally {
@@ -288,12 +287,14 @@ function ResumePageContent() {
           action: "align",
           resume: resumeText,
           jobDescription: selectedJob.description,
-          job: selectedJob,
+          jobId: selectedJob.id,
+          jobTitle: selectedJob.title,
+          company: selectedJob.company,
         }),
       });
       const data = await res.json();
       if (data.success) {
-        setAlignment(data.data);
+        setAlignment(data.data.alignment ?? data.data);
         fetchTrainingStatus();
         fetchAlignmentHistory();
         setFeedbackRating(null);
@@ -548,8 +549,7 @@ function ResumePageContent() {
             [
               { key: "editor", label: "Resume Editor", icon: FileText },
               { key: "analysis", label: "ATS Analysis", icon: BarChart3 },
-              { key: "aligned", label: "Aligned Resume", icon: Sparkles },
-              { key: "history", label: "History", icon: History },
+              { key: "aligned", label: "Aligned Resumes", icon: Sparkles },
               { key: "training", label: "Pioneer Training", icon: Brain },
             ] as const
           ).map((tab) => (
@@ -791,6 +791,30 @@ function ResumePageContent() {
                             )}
                             {copied ? "Copied!" : "Copy"}
                           </button>
+                          <button
+                            onClick={() => {
+                              const text = alignment.alignedResume;
+                              const html = `
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Aligned Resume</title>
+<style>
+  body { font-family: 'Georgia', serif; max-width: 800px; margin: 40px auto; padding: 20px; line-height: 1.6; color: #1a1a1a; font-size: 11pt; }
+  pre { white-space: pre-wrap; word-wrap: break-word; font-family: 'Georgia', serif; font-size: 11pt; }
+</style></head>
+<body><pre>${text.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</pre></body></html>`;
+                              const blob = new Blob([html], { type: 'text/html' });
+                              const printWindow = window.open('', '_blank');
+                              if (printWindow) {
+                                printWindow.document.write(html);
+                                printWindow.document.close();
+                                setTimeout(() => { printWindow.print(); }, 500);
+                              }
+                            }}
+                            className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs rounded-lg transition-colors"
+                          >
+                            <Download className="w-3 h-3" />
+                            Download PDF
+                          </button>
                         </div>
                       </div>
 
@@ -950,70 +974,85 @@ function ResumePageContent() {
                     description="Click 'Auto-Align' to have Pioneer + Gemini automatically optimize your resume for the selected job's ATS."
                   />
                 )}
-              </div>
-            )}
 
-            {activeTab === "history" && (
-              <div className="space-y-4">
-                {alignmentHistoryList.length === 0 ? (
-                  <EmptyState
-                    icon={History}
-                    title="No Alignments Yet"
-                    description="Aligned resumes will appear here. Use 'Auto-Align' to create your first alignment."
-                  />
-                ) : (
-                  alignmentHistoryList.map((h) => (
-                    <div
-                      key={h.id}
-                      className="bg-slate-800 rounded-xl border border-slate-700 p-5"
-                    >
-                      <div className="flex items-center justify-between mb-3">
-                        <div>
-                          <h4 className="text-xs font-semibold text-white">{h.jobTitle}</h4>
-                          <p className="text-[10px] text-slate-400">{h.company} • {new Date(h.createdAt).toLocaleDateString()}</p>
+                {/* Past Aligned Resumes */}
+                {alignmentHistoryList.length > 0 && (
+                  <div className="bg-slate-800 rounded-xl border border-slate-700 p-5">
+                    <h3 className="text-sm font-semibold text-white mb-4 flex items-center gap-2">
+                      <FileText className="w-4 h-4 text-indigo-400" />
+                      Past Aligned Resumes ({alignmentHistoryList.length})
+                    </h3>
+                    <div className="space-y-3">
+                      {alignmentHistoryList.map((h) => (
+                        <div
+                          key={h.id}
+                          className="bg-slate-900 rounded-lg border border-slate-700 p-4 hover:border-indigo-500/30 transition-colors"
+                        >
+                          <div className="flex items-center justify-between mb-2">
+                            <div>
+                              <h4 className="text-xs font-semibold text-white">{h.jobTitle}</h4>
+                              <p className="text-[10px] text-slate-400">{h.company} &middot; {new Date(h.createdAt).toLocaleDateString()}</p>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className={`text-xs font-bold ${h.atsScore >= 80 ? "text-emerald-400" : h.atsScore >= 50 ? "text-amber-400" : "text-red-400"}`}>
+                                ATS: {h.atsScore}%
+                              </span>
+                              {h.feedback ? (
+                                <span className={`text-[9px] px-2 py-0.5 rounded ${h.feedback.rating === "good" ? "bg-emerald-500/10 text-emerald-400" : h.feedback.rating === "bad" ? "bg-red-500/10 text-red-400" : "bg-amber-500/10 text-amber-400"}`}>
+                                  {h.feedback.rating === "good" ? "Approved" : h.feedback.rating === "bad" ? "Rejected" : "Needs Work"}
+                                </span>
+                              ) : null}
+                            </div>
+                          </div>
+                          <div className="bg-slate-800 rounded-lg border border-slate-700/50 p-3 max-h-24 overflow-y-auto mb-2">
+                            <pre className="text-[10px] text-slate-400 whitespace-pre-wrap font-mono">{h.alignedResume.slice(0, 300)}...</pre>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => {
+                                setAlignment({
+                                  id: h.id,
+                                  jobId: "",
+                                  originalResume: resumeText,
+                                  alignedResume: h.alignedResume,
+                                  resumeEntities: [],
+                                  jdEntities: [],
+                                  alignedEntities: [],
+                                  missingKeywords: h.missingKeywords || [],
+                                  addedKeywords: h.addedKeywords || [],
+                                  atsScore: h.atsScore,
+                                  humanScore: 0,
+                                  overallScore: h.overallScore,
+                                  suggestions: [],
+                                });
+                                setFeedbackSubmitted(!!h.feedback);
+                                window.scrollTo({ top: 0, behavior: "smooth" });
+                              }}
+                              className="text-[10px] text-indigo-400 hover:text-indigo-300 transition-colors"
+                            >
+                              View full &rarr;
+                            </button>
+                            <button
+                              onClick={() => {
+                                const text = h.alignedResume;
+                                const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Aligned Resume - ${h.jobTitle}</title><style>body{font-family:'Georgia',serif;max-width:800px;margin:40px auto;padding:20px;line-height:1.6;color:#1a1a1a;font-size:11pt;}pre{white-space:pre-wrap;word-wrap:break-word;font-family:'Georgia',serif;font-size:11pt;}</style></head><body><pre>${text.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</pre></body></html>`;
+                                const printWindow = window.open('', '_blank');
+                                if (printWindow) {
+                                  printWindow.document.write(html);
+                                  printWindow.document.close();
+                                  setTimeout(() => { printWindow.print(); }, 500);
+                                }
+                              }}
+                              className="text-[10px] text-emerald-400 hover:text-emerald-300 transition-colors flex items-center gap-1"
+                            >
+                              <Download className="w-2.5 h-2.5" />
+                              PDF
+                            </button>
+                          </div>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <span className={`text-xs font-bold ${h.atsScore >= 80 ? "text-emerald-400" : h.atsScore >= 50 ? "text-amber-400" : "text-red-400"}`}>
-                            ATS: {h.atsScore}%
-                          </span>
-                          {h.feedback ? (
-                            <span className={`text-[9px] px-2 py-0.5 rounded ${h.feedback.rating === "good" ? "bg-emerald-500/10 text-emerald-400" : h.feedback.rating === "bad" ? "bg-red-500/10 text-red-400" : "bg-amber-500/10 text-amber-400"}`}>
-                              {h.feedback.rating === "good" ? "Approved" : h.feedback.rating === "bad" ? "Rejected" : "Needs Work"}
-                            </span>
-                          ) : (
-                            <span className="text-[9px] px-2 py-0.5 rounded bg-slate-700 text-slate-400">No feedback</span>
-                          )}
-                        </div>
-                      </div>
-                      <div className="bg-slate-900 rounded-lg border border-slate-700 p-3 max-h-32 overflow-y-auto">
-                        <pre className="text-[10px] text-slate-400 whitespace-pre-wrap font-mono">{h.alignedResume.slice(0, 500)}...</pre>
-                      </div>
-                      <button
-                        onClick={() => {
-                          setAlignment({
-                            id: h.id,
-                            jobId: "",
-                            originalResume: resumeText,
-                            alignedResume: h.alignedResume,
-                            resumeEntities: [],
-                            jdEntities: [],
-                            alignedEntities: [],
-                            missingKeywords: h.missingKeywords || [],
-                            addedKeywords: h.addedKeywords || [],
-                            atsScore: h.atsScore,
-                            humanScore: 0,
-                            overallScore: h.overallScore,
-                            suggestions: [],
-                          });
-                          setActiveTab("aligned");
-                          setFeedbackSubmitted(!!h.feedback);
-                        }}
-                        className="mt-2 text-[10px] text-indigo-400 hover:text-indigo-300 transition-colors"
-                      >
-                        View full alignment →
-                      </button>
+                      ))}
                     </div>
-                  ))
+                  </div>
                 )}
               </div>
             )}
@@ -1269,8 +1308,8 @@ function ResumePageContent() {
             {alignmentHistoryList.length > 0 && (
               <div className="bg-slate-800 rounded-xl border border-slate-700 p-5">
                 <h3 className="text-xs font-semibold text-white mb-3 flex items-center gap-2">
-                  <History className="w-3.5 h-3.5 text-indigo-400" />
-                  Alignment History ({alignmentHistoryList.length})
+                  <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
+                  Recent Alignments ({alignmentHistoryList.length})
                 </h3>
                 <div className="space-y-2 max-h-64 overflow-y-auto">
                   {alignmentHistoryList.map((h) => (

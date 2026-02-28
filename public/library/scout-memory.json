@@ -1,7 +1,7 @@
 {
   "version": "1.0",
   "createdAt": "2026-02-27T05:58:10.045Z",
-  "updatedAt": "2026-02-27T19:37:05.175Z",
+  "updatedAt": "2026-02-27T23:32:47.205Z",
   "profile": {
     "roles": [],
     "skills": []
@@ -230,6 +230,22 @@
       "jobsFound": 1,
       "relevanceScore": 0.79,
       "addedAt": "2026-02-19T13:00:00Z"
+    },
+    {
+      "company": "Chalk",
+      "careerPageUrl": "https://www.linkedin.com",
+      "lastChecked": "2026-02-27T23:30:57.401Z",
+      "jobsFound": 2,
+      "relevanceScore": 0,
+      "addedAt": "2026-02-27T23:29:13.709Z"
+    },
+    {
+      "company": "TechTree (Loop)",
+      "careerPageUrl": "https://www.linkedin.com",
+      "lastChecked": "2026-02-27T23:32:47.205Z",
+      "jobsFound": 1,
+      "relevanceScore": 0,
+      "addedAt": "2026-02-27T23:32:47.205Z"
     }
   ],
   "insights": {
@@ -253,7 +269,17 @@
       "Distributed Systems",
       "GraphQL",
       "Redis",
-      "CI/CD"
+      "CI/CD",
+      "data platform",
+      "platform",
+      "machine learning applications",
+      "C++",
+      "type inference",
+      "PL",
+      "compiler construction",
+      "frontend",
+      "ML data platform",
+      "frontend architecture"
     ],
     "emergingCompanies": [
       "Anthropic",
@@ -267,7 +293,7 @@
       "monitor company careers page",
       "skill-based broad search"
     ],
-    "totalJobsDiscovered": 51,
+    "totalJobsDiscovered": 54,
     "avgRelevanceScore": 0.77
   }
 }

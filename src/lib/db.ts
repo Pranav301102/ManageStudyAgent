@@ -80,6 +80,33 @@ function initSchema(db: Database.Database) {
       date TEXT NOT NULL,
       created_at TEXT DEFAULT (datetime('now'))
     );
+
+    CREATE TABLE IF NOT EXISTS settings (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL,
+      updated_at TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS resume_alignments (
+      id TEXT PRIMARY KEY,
+      job_id TEXT,
+      data TEXT NOT NULL,
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS training_samples (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      data TEXT NOT NULL,
+      feedback_rating TEXT,
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS processed_updates (
+      update_id TEXT PRIMARY KEY,
+      scout_id TEXT,
+      jobs_count INTEGER DEFAULT 0,
+      created_at TEXT DEFAULT (datetime('now'))
+    );
   `);
 
     // Seed default user if none exists
@@ -168,4 +195,15 @@ export function updateUser(userId: string, updates: Record<string, unknown>) {
     });
 
     getDb().prepare(`UPDATE users SET ${setStr} WHERE id = ?`).run(...vals, userId);
+}
+
+// ─── Settings helpers ────────────────────────────────────────────────
+
+export function getSetting(key: string): string | null {
+    const row = getDb().prepare("SELECT value FROM settings WHERE key = ?").get(key) as { value: string } | undefined;
+    return row ? row.value : null;
+}
+
+export function setSetting(key: string, value: string): void {
+    getDb().prepare("INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES (?, ?, datetime('now'))").run(key, value);
 }
